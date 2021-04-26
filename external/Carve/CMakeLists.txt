@@ -7,11 +7,12 @@ SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
 SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release)
 SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release)
 SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release)
+ENDIF(NOT WIN32)
 
 IF(NOT CMAKE_BUILD_TYPE)
     SET(CMAKE_BUILD_TYPE "Release")
 ENDIF()
-ENDIF(NOT WIN32)
+
 
 SET(carve_VERSION_MAJOR 2)
 SET(carve_VERSION_MINOR 0)
@@ -62,6 +63,10 @@ IF(BUILD_STATIC_LIBRARY)
   ADD_LIBRARY(carve STATIC ${CARVE_SOURCE_FILES})
 ELSE()
   ADD_LIBRARY(carve SHARED ${CARVE_SOURCE_FILES})
+  IF(WIN32)
+    #set_target_properties(carve PROPERTIES ENABLE_EXPORTS 1)
+    set_target_properties(carve PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)
+  ENDIF()
 ENDIF()
 
 # Use this to request C++11 features. Dependent targets will transitively get
@@ -88,7 +93,7 @@ INSTALL(
 )
 INSTALL(
     TARGETS carve
-    EXPORT  carve
+    EXPORT  carveConfig
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
@@ -99,12 +104,13 @@ SET(target_output_filename carve-targets.cmake)
 SET(target_output "${CMAKE_BINARY_DIR}/cmake/${target_output_filename}")
 
 export(
-  EXPORT carve
-  FILE ${target_output}
+  TARGETS carve
+  #EXPORT carve
+  FILE  ${target_output}
   NAMESPACE IFCPP::)
 
 install(
-  EXPORT carve
+  EXPORT carveConfig
   DESTINATION ${IFCPP_CONFIG_DIR}
   FILE ${target_output_filename}
   NAMESPACE IFCPP::)

@@ -96,7 +96,7 @@ INSTALL(
 )
 INSTALL(
     TARGETS IfcPlusPlus
-    EXPORT  IfcPlusPlus
+    EXPORT  IfcPlusPlusConfig
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
@@ -106,12 +106,13 @@ SET(target_output_filename IfcPlusPlus-targets.cmake)
 SET(target_output "${CMAKE_BINARY_DIR}/cmake/${target_output_filename}")
 
 export(
-  EXPORT IfcPlusPlus
+  #EXPORT IfcPlusPlus
+  TARGETS IfcPlusPlus
   FILE ${target_output}
   NAMESPACE IFCPP::)
 
 install(
-  EXPORT IfcPlusPlus
+  EXPORT IfcPlusPlusConfig
   DESTINATION ${IFCPP_CONFIG_DIR}
   FILE ${target_output_filename}
   NAMESPACE IFCPP::)
