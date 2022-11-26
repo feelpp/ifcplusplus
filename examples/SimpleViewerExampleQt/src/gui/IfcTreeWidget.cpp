@@ -18,16 +18,17 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 #include <ifcpp/model/BasicTypes.h>
 #include <ifcpp/model/BuildingObject.h>
 #include <ifcpp/model/BuildingModel.h>
-#include <ifcpp/IFC4/include/IfcObjectDefinition.h>
-#include <ifcpp/IFC4/include/IfcSpatialStructureElement.h>
-#include <ifcpp/IFC4/include/IfcRelContainedInSpatialStructure.h>
-#include <ifcpp/IFC4/include/IfcRelAggregates.h>
-#include <ifcpp/IFC4/include/IfcAxis2Placement.h>
-#include <ifcpp/IFC4/include/IfcAxis2Placement3D.h>
-#include <ifcpp/IFC4/include/IfcGeometricRepresentationContext.h>
-#include <ifcpp/IFC4/include/IfcDirection.h>
-#include <ifcpp/IFC4/include/IfcProject.h>
-#include <ifcpp/IFC4/include/IfcLabel.h>
+#include <ifcpp/IFC4X3/include/IfcAxis2Placement.h>
+#include <ifcpp/IFC4X3/include/IfcAxis2Placement3D.h>
+#include <ifcpp/IFC4X3/include/IfcDirection.h>
+#include <ifcpp/IFC4X3/include/IfcGeometricRepresentationContext.h>
+#include <ifcpp/IFC4X3/include/IfcLabel.h>
+#include <ifcpp/IFC4X3/include/IfcObjectDefinition.h>
+#include <ifcpp/IFC4X3/include/IfcProject.h>
+#include <ifcpp/IFC4X3/include/IfcRelAggregates.h>
+#include <ifcpp/IFC4X3/include/IfcRelContainedInSpatialStructure.h>
+#include <ifcpp/IFC4X3/include/IfcSpatialStructureElement.h>
+#include <ifcpp/IFC4X3/include/IfcTypeProduct.h>
 
 #include "IncludeGeometryHeaders.h"
 #include "IfcPlusPlusSystem.h"
@@ -97,7 +98,7 @@ void IfcTreeWidget::slotObjectsSelected( std::map<std::string, shared_ptr<Buildi
 
 	// take the first object from map and highlight it
 	shared_ptr<BuildingEntity> object = (*(map.begin())).second;
-	int selected_id = object->m_entity_id;
+	int selected_id = object->m_tag;
 
 	for( int i=0; i<topLevelItemCount(); ++i )
 	{
@@ -196,6 +197,55 @@ void IfcTreeWidget::slotModelLoadingStart()
 	slotModelCleared();
 }
 
+bool hasParentInBuildingStructure(shared_ptr<BuildingObject> obj)
+{
+	shared_ptr<IfcObjectDefinition> obj_def = dynamic_pointer_cast<IfcObjectDefinition>(obj);
+	if (!obj_def)
+	{
+		return true;
+	}
+
+	shared_ptr<IfcTypeProduct> typeProduct = dynamic_pointer_cast<IfcTypeProduct>(obj);
+	if (typeProduct)
+	{
+		return true;
+	}
+
+	if (obj_def->m_Decomposes_inverse.size() > 0)
+	{
+		return true;
+	}
+
+	shared_ptr<IfcSpatialStructureElement> spatial_ele = dynamic_pointer_cast<IfcSpatialStructureElement>(obj_def);
+	if (spatial_ele)
+	{
+		std::vector<weak_ptr<IfcRelContainedInSpatialStructure> >& vec_contained = spatial_ele->m_ContainsElements_inverse;
+		if (vec_contained.size() > 0)
+		{
+
+			for (auto it_rel_contained = vec_contained.begin(); it_rel_contained!=vec_contained.end(); ++it_rel_contained)
+			{
+				shared_ptr<IfcRelContainedInSpatialStructure> rel_contained(*it_rel_contained);
+
+				//std::vector<shared_ptr<IfcProduct> >	m_RelatedElements;
+				//shared_ptr<IfcSpatialElement>			m_RelatingStructure;
+
+				std::vector<shared_ptr<IfcProduct> >& vec_related_elements = rel_contained->m_RelatedElements;
+
+				if (rel_contained->m_RelatingStructure == spatial_ele)
+				{
+					if (vec_related_elements.size() > 0)
+					{
+						return true;
+					}
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
 QTreeWidgetItem* resolveTreeItems( shared_ptr<BuildingObject> obj, std::unordered_set<int>& set_visited )
 {
 	QTreeWidgetItem* item = nullptr;
@@ -206,31 +256,31 @@ QTreeWidgetItem* resolveTreeItems( shared_ptr<BuildingObject> obj, std::unordere
 	shared_ptr<IfcObjectDefinition> obj_def = dynamic_pointer_cast<IfcObjectDefinition>(obj);
 	if( obj_def )
 	{
-		if( set_visited.find( obj_def->m_entity_id ) != set_visited.end() )
+		if( set_visited.find( obj_def->m_tag ) != set_visited.end() )
 		{
 			return nullptr;
 		}
-		set_visited.insert( obj_def->m_entity_id );
+		set_visited.insert( obj_def->m_tag );
 
 
 		item = new QTreeWidgetItem();
 		
 		if( obj_def->m_Name )
 		{
-			if( obj_def->m_Name->m_value.size() > 0 )
+			std::string name = obj_def->m_Name->m_value;
+			if( name.size() > 0 )
 			{
-				item->setText(0, QString::fromStdWString(obj_def->m_Name->m_value));
+				item->setText(0, QString::fromStdWString(string2wstring(name)));
 			}
 		}
 
-		item->setText( 1, QString::number( obj_def->m_entity_id ) );
-		item->setText( 2, obj_def->className() );
+		item->setText( 1, QString::number( obj_def->m_tag ) );
+		item->setText( 2, EntityFactory::getStringForClassID(obj_def->classID()) );
 
 		if( obj_def->m_IsDecomposedBy_inverse.size() > 0 )
 		{
 			std::vector<weak_ptr<IfcRelAggregates> >& vec_IsDecomposedBy = obj_def->m_IsDecomposedBy_inverse;
-			std::vector<weak_ptr<IfcRelAggregates> >::iterator it;
-			for( it=vec_IsDecomposedBy.begin(); it!=vec_IsDecomposedBy.end(); ++it )
+			for( auto it=vec_IsDecomposedBy.begin(); it!=vec_IsDecomposedBy.end(); ++it )
 			{
 				shared_ptr<IfcRelAggregates> rel_agg( *it );
 				std::vector<shared_ptr<IfcObjectDefinition> >& vec = rel_agg->m_RelatedObjects;
@@ -307,6 +357,12 @@ void IfcTreeWidget::slotModelLoadingDone()
 		for( auto it = map_outside.begin(); it != map_outside.end(); ++it )
 		{
 			shared_ptr<BuildingObject>& ifc_object = it->second;
+
+			if (hasParentInBuildingStructure(ifc_object))
+			{
+				continue;
+			}
+
 			QTreeWidgetItem* object_item = resolveTreeItems( ifc_object, set_visited );
 			if( object_item != NULL )
 			{

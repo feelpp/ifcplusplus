@@ -83,7 +83,7 @@ TabReadWrite::TabReadWrite( IfcPlusPlusSystem* sys, ViewerWidget* viewer, QWidge
 	m_txt_out = new QTextEdit();
 
 #ifdef _DEBUG
-	std::wstring str = L"test";
+	std::string str = "test";
 	std::string str1 = encodeStepString(str);
 
 	std::stringstream uuid_strs;
@@ -150,7 +150,7 @@ void TabReadWrite::messageTarget( void* ptr, shared_ptr<StatusCallback::Message>
 
 		if( m->m_entity )
 		{
-			strs_report << ", IFC entity: #" << m->m_entity->m_entity_id << "=" << m->m_entity->className();
+			strs_report << ", IFC entity: #" << m->m_entity->m_tag << "=" << EntityFactory::getStringForClassID(m->m_entity->classID());
 		}
 		std::wstring message_str = strs_report.str().c_str();
 
@@ -268,7 +268,7 @@ void TabReadWrite::loadIfcFile( QString& path_in )
 
 	try
 	{
-		std::wstring path_str = path_in.toStdWString();
+		std::string path_str = path_in.toStdString();
 		if (path_str.length() == 0)
 		{
 			return;
@@ -283,6 +283,8 @@ void TabReadWrite::loadIfcFile( QString& path_in )
 		shared_ptr<GeometryConverter> geometry_converter = m_system->getGeometryConverter();
 		geometry_converter->clearMessagesCallback();
 		geometry_converter->resetModel();
+		geometry_converter->getGeomSettings()->setNumVerticesPerCircle(16);
+		geometry_converter->getGeomSettings()->setMinNumVerticesPerArc(4);
 		std::stringstream err;
 
 		// load file to IFC model
@@ -291,8 +293,6 @@ void TabReadWrite::loadIfcFile( QString& path_in )
 		step_reader->loadModelFromFile(path_str, geometry_converter->getBuildingModel());
 
 		// convert IFC geometric representations into Carve geometry
-		const double length_in_meter = geometry_converter->getBuildingModel()->getUnitConverter()->getLengthInMeterFactor();
-		geometry_converter->setCsgEps(1.5e-08*length_in_meter);
 		geometry_converter->convertGeometry();
 
 		// convert Carve geometry to OSG
@@ -329,15 +329,27 @@ void TabReadWrite::loadIfcFile( QString& path_in )
 			{
 				if (bsphere.center().length()/bsphere.radius() > 100)
 				{
-					std::unordered_set<osg::Geode*> set_applied;
-					SceneGraphUtils::translateGroup(model_switch, -bsphere.center(), set_applied, length_in_meter*0.001);
+					//std::unordered_set<osg::Node*> set_applied;
+					//SceneGraphUtils::translateGroup(model_switch, , set_applied, length_in_meter*0.001);
+
+					osg::MatrixTransform* mt = new osg::MatrixTransform();
+					mt->setMatrix(osg::Matrix::translate(-bsphere.center()*0.98));
+
+					int num_children = model_switch->getNumChildren();
+					for (int i = 0; i < num_children; ++i)
+					{
+						osg::Node* node = model_switch->getChild(i);
+						if (!node)
+						{
+							continue;
+						}
+						mt->addChild(node);
+					}
+					SceneGraphUtils::removeChildren(model_switch);
+					model_switch->addChild(mt);
 				}
 			}
 		}
-	}
-	catch( OutOfMemoryException& e)
-	{
-		txtOutError( e.what() );
 	}
 	catch( BuildingException& e )
 	{
@@ -465,7 +477,7 @@ void TabReadWrite::slotWriteFileClicked()
 	txtOut( "writing file: " + path );
 	int millisecs = clock();
 
-	std::wstring path_std = path.toStdWString();
+	std::string path_std = path.toStdString();
 	try
 	{
 		if (path_std.length() == 0)
@@ -480,7 +492,7 @@ void TabReadWrite::slotWriteFileClicked()
 		shared_ptr<WriterSTEP> writer_step(new WriterSTEP());
 		writer_step->writeModelToStream(stream, model);
 
-		QFile file_out(QString::fromStdWString(path_std.c_str()));
+		QFile file_out(QString::fromStdString(path_std.c_str()));
 		if (!file_out.open(QIODevice::WriteOnly | QIODevice::Text))
 		{
 			return;

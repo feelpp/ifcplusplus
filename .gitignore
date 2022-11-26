@@ -20,6 +20,9 @@
 *.pdb
 *.tlog
 *.log
+*.bin
+*.vsidx
+*.lock
 bin
 bin32
 /build/
@@ -38,3 +41,6 @@ examples/CreateWallAndWriteFile/CreateWallAndWriteFile/SimpleWall.ifc
 examples/CreateWallAndWriteFile/SimpleWall.ifc
 examples/LoadFileExampleNoGUI/LoadFileExampleNoGUI/x64/
 external/Carve/build/
+examples/CreateWallAndWriteFile/x64/
+examples/LoadFileWithGeometryExampleConsole/dump_mesh_debug.txt
+IfcPlusPlus-*

@@ -25,12 +25,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 #include <ifcpp/model/BuildingException.h>
 #include <ifcpp/model/BuildingGuid.h>
 #include <ifcpp/reader/ReaderUtil.h>
-#include <ifcpp/IFC4/include/IfcProduct.h>
-#include <ifcpp/IFC4/include/IfcSite.h>
-#include <ifcpp/IFC4/include/IfcLengthMeasure.h>
-#include <ifcpp/IFC4/include/IfcOpeningElement.h>
-#include <ifcpp/IFC4/include/IfcOwnerHistory.h>
-#include <ifcpp/IFC4/include/IfcGloballyUniqueId.h>
+#include <IfcProduct.h>
+#include <IfcSite.h>
+#include <IfcLengthMeasure.h>
+#include <IfcOpeningElement.h>
+#include <IfcOwnerHistory.h>
+#include <IfcGloballyUniqueId.h>
 
 #include "cmd/CmdRemoveSelectedObjects.h"
 #include "cmd/CommandManager.h"
@@ -47,8 +47,7 @@ std::string getGUID(const shared_ptr<BuildingEntity>& ent)
 	{
 		if (ifc_root->m_GlobalId)
 		{
-			std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> StringConverter;
-			guid = StringConverter.to_bytes(ifc_root->m_GlobalId->m_value);
+			guid = ifc_root->m_GlobalId->m_value;
 		}
 	}
 	return guid;
@@ -134,10 +133,6 @@ bool IfcPlusPlusSystem::handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActio
 			default:
 				break;
 		}
-	}
-	catch( OutOfMemoryException& e)
-	{
-		throw e;
 	}
 	catch( BuildingException& e )
 	{
@@ -239,7 +234,11 @@ void IfcPlusPlusSystem::setObjectSelected( shared_ptr<BuildingEntity> ifc_object
 					selected_entity->m_material_previous = material_previous;
 				}
 
-				stateset->setAttribute( m_material_selected, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE );
+				//stateset->setAttribute( m_material_selected, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE );
+
+				osg::ref_ptr<osg::StateSet> statesetSelected = new osg::StateSet();
+				statesetSelected->setAttribute(m_material_selected, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
+				grp->setStateSet(statesetSelected);
 				selected_entity->m_material_selected = m_material_selected;
 			}
 

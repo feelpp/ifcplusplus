@@ -26,6 +26,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 void appendRealWithoutTrailingZeros(std::stringstream& stream, const double number)
 {
 	std::ostringstream temp;
+	temp.imbue(std::locale("C"));
 	temp.precision(15);
 	temp << std::fixed << number;
 	std::string str = temp.str();
@@ -172,9 +173,9 @@ void writeRealList3D(std::stringstream& stream, const std::vector<std::vector<st
 }
 
 
-std::string encodeStepString( const std::wstring& str )
+std::string encodeStepString( const std::string& str )
 {
-	wchar_t* stream_pos = const_cast<wchar_t*>(str.c_str());
+	char* stream_pos = const_cast<char*>(str.c_str());
 	std::string result_str;
 	std::string beginUnicodeTag = "\\X2\\";
 	std::string endUnicodeTag = "\\X0\\";
@@ -225,8 +226,8 @@ std::string encodeStepString( const std::wstring& str )
 		else
 		{
 			int value = static_cast<int>(append_char);
-			wchar_t temporary[8];
-			swprintf( temporary, 5, L"%04X", value );
+			char temporary[8];
+			sprintf( temporary, "%04X", value );
 
 			if( !hasOpenedUnicodeTag )
 			{
@@ -234,15 +235,10 @@ std::string encodeStepString( const std::wstring& str )
 				hasOpenedUnicodeTag = true;
 			}
 
-			char mb[8];
-			wctomb( mb, temporary[0] );
-			result_str.push_back( mb[0] );
-			wctomb( mb, temporary[1] );
-			result_str.push_back( mb[0] );
-			wctomb( mb, temporary[2] );
-			result_str.push_back( mb[0] );
-			wctomb( mb, temporary[3] );
-			result_str.push_back( mb[0] );
+			result_str.push_back( temporary[0] );
+			result_str.push_back( temporary[1] );
+			result_str.push_back( temporary[2] );
+			result_str.push_back( temporary[3] );
 		}
 		++stream_pos;
 	}
