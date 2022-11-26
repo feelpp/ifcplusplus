@@ -22,11 +22,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 		#define ENABLE_OPENMP
 	#endif
 #endif
+#if defined(ENABLE_OPENMP)
 #include <omp.h>
 
-class Mutex 
-{ 
-public: 
+class Mutex
+{
+public:
 	Mutex()
 	{
 		omp_init_lock(&m_lock);
@@ -35,7 +36,7 @@ public:
 	{
 		omp_destroy_lock(&m_lock);
 	}
-	
+
 	void lock()
 	{
 		omp_set_lock(&m_lock);
@@ -52,12 +53,12 @@ public:
 	}
 
 protected:
-	omp_lock_t m_lock; 
-}; 
+	omp_lock_t m_lock;
+};
 
 class ScopedLock
-{ 
-public: 
+{
+public:
 	ScopedLock( Mutex& m )  : m_mutex(m)
 	{
 		m_mutex.lock();
@@ -68,5 +69,6 @@ public:
 	}
 
 protected:
-	Mutex&	m_mutex; 
+	Mutex&	m_mutex;
 };
+#endif
