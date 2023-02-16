@@ -17,12 +17,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 
 #pragma once
 
-#include "AbstractWriter.h"
+#include "ifcpp/model/BuildingModel.h"
+#include "ifcpp/model/StatusCallback.h"
 
-class IFCQUERY_EXPORT WriterSTEP : public AbstractWriter
+class IFCQUERY_EXPORT WriterSTEP : public StatusCallback
 {
 public:
 	WriterSTEP() = default;
 	~WriterSTEP() = default;
 	virtual void writeModelToStream( std::stringstream& stream, shared_ptr<BuildingModel> model );
+	static void getStepLine( const shared_ptr<BuildingEntity>& be, std::stringstream& stream);
+	static void getAttributeStepArgument(uint32_t entityClassID, const std::string& attributeName, bool attributeIsSelectType, bool isOptional, const shared_ptr<BuildingObject>& attributeObject, std::stringstream& stream);
 };
