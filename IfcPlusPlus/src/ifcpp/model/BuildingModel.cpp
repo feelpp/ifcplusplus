@@ -131,9 +131,11 @@ void BuildingModel::initIfcModel()
 	insertEntity(app);
 
 	shared_ptr<IfcCartesianPoint> point( new IfcCartesianPoint() );
-	point->m_Coordinates.push_back( std::make_shared<IfcLengthMeasure>( 0.0 ) );
-	point->m_Coordinates.push_back( std::make_shared<IfcLengthMeasure>( 0.0 ) );
-	point->m_Coordinates.push_back( std::make_shared<IfcLengthMeasure>( 0.0 ) );
+	point->m_Coordinates[0] = 0.0;
+	point->m_Coordinates[1] = 0.0;
+	point->m_Coordinates[2] = 0.0;
+	//point->m_Coordinates.push_back( std::make_shared<IfcLengthMeasure>( 0.0 ) );
+	//point->m_Coordinates.push_back( std::make_shared<IfcLengthMeasure>( 0.0 ) );
 	insertEntity(point);
 
 	shared_ptr<IfcAxis2Placement3D> axis_placement( new IfcAxis2Placement3D() );
@@ -200,21 +202,23 @@ void BuildingModel::initIfcModel()
 	// set up world coordinate system
 	shared_ptr<IfcDirection> axis( new IfcDirection() );
 	insertEntity(axis);
-	axis->m_DirectionRatios.push_back( std::make_shared<IfcReal>( 0.0 ) );
+	axis->m_DirectionRatios.push_back( std::make_shared<IfcReal>( 1.0 ) );
 	axis->m_DirectionRatios.push_back( std::make_shared<IfcReal>( 0.0 ) );
 	axis->m_DirectionRatios.push_back( std::make_shared<IfcReal>( 0.0 ) );
 
 	shared_ptr<IfcDirection> ref_direction( new IfcDirection() );
 	insertEntity(ref_direction);
 	ref_direction->m_DirectionRatios.push_back( std::make_shared<IfcReal>( 0.0 ) );
-	ref_direction->m_DirectionRatios.push_back( std::make_shared<IfcReal>( 0.0 ) );
+	ref_direction->m_DirectionRatios.push_back( std::make_shared<IfcReal>( 1.0 ) );
 	ref_direction->m_DirectionRatios.push_back( std::make_shared<IfcReal>( 0.0 ) );
 
 	shared_ptr<IfcCartesianPoint> location( new IfcCartesianPoint() );
 	insertEntity(location);
-	location->m_Coordinates.push_back( std::make_shared<IfcLengthMeasure>(0.0 ) );
-	location->m_Coordinates.push_back( std::make_shared<IfcLengthMeasure>(0.0 ) );
-	location->m_Coordinates.push_back( std::make_shared<IfcLengthMeasure>(0.0 ) );
+	location->m_Coordinates[0] = 0.0;
+	location->m_Coordinates[1] = 0.0;
+	location->m_Coordinates[2] = 0.0;
+	//location->m_Coordinates.push_back( std::make_shared<IfcLengthMeasure>(0.0 ) );
+	//location->m_Coordinates.push_back( std::make_shared<IfcLengthMeasure>(0.0 ) );
 
 	shared_ptr<IfcAxis2Placement3D> world_coordinate_system( new IfcAxis2Placement3D() );
 	insertEntity(world_coordinate_system);
@@ -575,31 +579,42 @@ void BuildingModel::updateCache()
 	for( auto it=m_map_entities.begin(); it!=m_map_entities.end(); ++it )
 	{
 		shared_ptr<BuildingEntity> obj = it->second;
-		if( dynamic_pointer_cast<IfcProject>(obj) )
+		if( obj->classID() == IFC4X3::IFCPROJECT )
 		{
 			if( m_ifc_project )
 			{
-				messageCallback( "More than one IfcProject in model", StatusCallback::MESSAGE_TYPE_ERROR, __FUNC__, m_ifc_project.get() );
+				messageCallback("More than one IfcProject in model", StatusCallback::MESSAGE_TYPE_ERROR, __FUNC__, m_ifc_project.get());
 			}
-			m_ifc_project = dynamic_pointer_cast<IfcProject>( obj );
-			found_project = true;
-			if( found_geom_context )
+			m_ifc_project = dynamic_pointer_cast<IfcProject>(obj);
+			
+			if( m_ifc_project )
 			{
-				break;
+				found_project = true;
+				if( found_geom_context )
+				{
+					break;
+				}
+			}
+			else
+			{
+				std::cout << "BuildingModel::updateCache: IfcProject found but dynamic_cast failed. Is RTTI enabled?" << std::endl;
 			}
 		}
-		else if( dynamic_pointer_cast<IfcGeometricRepresentationContext>(obj) )
+		else if( obj->classID() == IFC4X3::IFCGEOMETRICREPRESENTATIONCONTEXT )
 		{
-			shared_ptr<IfcGeometricRepresentationContext> context = dynamic_pointer_cast<IfcGeometricRepresentationContext>( obj );
-			if( context->m_CoordinateSpaceDimension )
+			shared_ptr<IfcGeometricRepresentationContext> context = dynamic_pointer_cast<IfcGeometricRepresentationContext>(obj);
+			if( context )
 			{
-				if( context->m_CoordinateSpaceDimension->m_value == 3 )
+				if( context->m_CoordinateSpaceDimension )
 				{
-					m_geom_context_3d = context;
-					found_geom_context = true;
-					if( found_project )
+					if( context->m_CoordinateSpaceDimension->m_value == 3 )
 					{
-						break;
+						m_geom_context_3d = context;
+						found_geom_context = true;
+						if( found_project )
+						{
+							break;
+						}
 					}
 				}
 			}
@@ -609,6 +624,10 @@ void BuildingModel::updateCache()
 	if( found_project )
 	{
 		m_unit_converter->setIfcProject( m_ifc_project );
+	}
+	else
+	{
+		std::cout << "BuildingModel::updateCache, IfcProject not found in model with " << m_map_entities.size() << " items" << std::endl;
 	}
 }
 

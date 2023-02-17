@@ -45,6 +45,7 @@ void readIntegerList( const std::string& str, std::vector<int>& vec );
 void readIntegerList2D( const std::string& str, std::vector<std::vector<int> >& vec );
 void readIntegerList3D( const std::string& str, std::vector<std::vector<std::vector<int> > >& vec );
 void readRealList( const std::string& str, std::vector<double>& vec );
+void readRealArray( const std::string& str, double (&vec)[3], short int& size );
 void readRealList2D( const std::string& str, std::vector<std::vector<double> >& vec );
 void readRealList3D( const std::string& str, std::vector<std::vector<std::vector<double> > >& vec );
 void readBinary( const std::string& str, std::string& target );
@@ -64,90 +65,35 @@ void checkOpeningClosingParenthesis(const char* ch_check);
 
 IFCQUERY_EXPORT std::string wstring2string(const std::wstring& str);
 IFCQUERY_EXPORT std::wstring string2wstring(const std::string& inputString);
-
-IFCQUERY_EXPORT bool std_iequal(const std::wstring& a, const std::wstring& b);
 IFCQUERY_EXPORT bool std_iequal(const std::string& a, const std::string& b);
 
 inline std::string getFileExtension(std::string path)
 {
 #ifdef _MSC_VER
 	return std::filesystem::path(string2wstring(path)).extension().string();
-#endif
+#else
 	return std::filesystem::path(path).extension().string();
-}
-
-inline void readIntegerValue( const std::string& str, int& int_value )
-{
-	if( str.compare( "$" ) == 0 )
-	{
-		int_value = std::numeric_limits<int>::quiet_NaN();
-	}
-	else if( str.compare( "*" ) == 0 )
-	{
-		int_value = std::numeric_limits<int>::quiet_NaN();
-	}
-	else
-	{
-		int_value = std::stoi( str );
-	}
+#endif
 }
 
 IFCQUERY_EXPORT void decodeArgumentStrings( std::vector<std::string>& entity_arguments, std::vector<std::string>& args_out );
 
-inline void readBool( const std::string& attribute_value, bool& target )
-{
-	if( std_iequal( attribute_value, ".F." ) )
-	{
-		target = false;
-	}
-	else if( std_iequal( attribute_value, ".T." ) )
-	{
-		target = true;
-	}
-}
+void readBool(const std::string& attribute_value, bool& target);
+void readLogical(const std::string& attribute_value, LogicalEnum& target);
+void readInteger(const std::string& attribute_value, int& target);
+void readIntegerValue(const std::string& str, int& int_value);
+void readReal(const std::string& attribute_value, double& target);
+void readString(const std::string& attribute_value, std::string& target);
 
-inline void readLogical( const std::string& attribute_value, LogicalEnum& target )
-{
-	if( std_iequal(attribute_value, ".F." ) )
-	{
-		target = LOGICAL_FALSE;
-	}
-	else if( std_iequal( attribute_value, ".T." ) )
-	{
-		target = LOGICAL_TRUE;
-	}
-	else if( std_iequal( attribute_value, ".U." ) )
-	{
-		target = LOGICAL_UNKNOWN;
-	}
-}
-
-inline void readInteger( const std::string& attribute_value, int& target )
-{
-	target = std::stoi( attribute_value );
-}
-
-inline void readReal( const std::string& attribute_value, double& target )
-{
-	target = std::stod( attribute_value );
-}
-
-inline void readString( const std::string& attribute_value, std::string& target )
-{
-	if( attribute_value.size() < 2 )
-	{
-		target = attribute_value;
-		return;
-	}
-	if( attribute_value[0] == '\'' && attribute_value[attribute_value.size()-1] == '\'' )
-	{
-		target = attribute_value.substr( 1, attribute_value.size()-2 );
-	}
-	else
-	{
-		target = attribute_value;
-	}
-}
+////------------------------------------------------------------
+//void readDoubleValueFromSTEP( const std::string& arg, double& value, const std::map<int,shared_ptr<BuildingEntity> >& map, std::stringstream& errorStream )
+//{
+//	if( arg.compare("$") == 0 ) { value = std::numeric_limits<double>::quiet_NaN(); return; }
+//	if( arg.compare("*") == 0 ) { value = std::numeric_limits<double>::quiet_NaN(); return; }
+//
+//	readReal( arg, value );
+//}
+////------------------------------------------------------------
 
 template<typename T>
 void readTypeOfIntegerList( const std::string& str, std::vector<shared_ptr<T> >& target_vec )
@@ -609,9 +555,7 @@ void readSelectType( const std::string& item, shared_ptr<select_t>& result, cons
 		return;
 	}
 
-	std::stringstream strs;
-	strs << "unhandled select argument: " << item << " in function readSelectType" << std::endl;
-	throw BuildingException( strs.str() );
+	errorStream << "unhandled select argument: " << item << " in function readSelectType" << std::endl;
 }
 
 template<typename select_t>
@@ -637,7 +581,6 @@ void readSelectList( const std::string& arg_complete, std::vector<shared_ptr<sel
 	std::vector<std::string> list_items;
 	tokenizeList( arg, list_items );
 
-	std::stringstream err;
 	for( size_t i=0; i<list_items.size(); ++i )
 	{
 		std::string& item = list_items[i];
@@ -649,18 +592,13 @@ void readSelectList( const std::string& arg_complete, std::vector<shared_ptr<sel
 		}
 		catch( BuildingException& e )
 		{
-			err << e.what();
+			errorStream << e.what();
 		}
 		if( select_object )
 		{
 			vec.push_back( select_object );
 		}
 	}
-	if( err.tellp() > 0 )
-	{
-		throw BuildingException( err.str().c_str(), __FUNC__ );
-	}
-	return;
 }
 
 template<typename T>
