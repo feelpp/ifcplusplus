@@ -58,12 +58,14 @@ protected:
 
 	std::map<std::string, shared_ptr<ProductShapeData> >	m_product_shape_data;
 	std::map<std::string, shared_ptr<BuildingObject> >		m_map_outside_spatial_structure;
-	std::set<std::string> m_setResolvedProjectStructure;
+	std::set<int> m_setResolvedProjectStructure;
 	vec3 m_siteOffset;
 	double m_recent_progress = 0;
 	std::map<int, std::vector<shared_ptr<StatusCallback::Message> > > m_messages;
+
 #ifdef _OPENMP
 	Mutex m_writelock_messages;
+	Mutex m_writelock_item_cache;
 #endif
 
 public:
@@ -92,7 +94,11 @@ public:
 		m_ifc_model->setMessageTarget( this );
 		m_representation_converter->setMessageTarget( this );
 	}
-	virtual ~GeometryConverter() {}
+	virtual ~GeometryConverter()
+	{
+		m_callback_object_geometry_converted = nullptr;
+		m_callback_func_geometry_converted = nullptr;
+	}
 
 	void setGeometryCallbackFunction( void* obj_ptr, void (*func)(void*, shared_ptr<ProductShapeData> t) )
 	{
@@ -219,7 +225,7 @@ public:
 		}
 
 #ifdef _DEBUG
-		 std::string className = IFC4X3::EntityFactory::getStringForClassID(ifc_object_def->classID());
+		std::string className = IFC4X3::EntityFactory::getStringForClassID(ifc_object_def->classID());
 #endif
 
 		for( const weak_ptr<IfcRelAggregates>& relAggregates_weak_ptr : ifc_object_def->m_IsDecomposedBy_inverse )
@@ -237,33 +243,31 @@ public:
 					const shared_ptr<IfcObjectDefinition>& related_obj_def = vec_related_objects[jj];
 					if( related_obj_def )
 					{
-						std::string related_guid;
+						int tag = related_obj_def->m_tag;
+						if( tag < 0 )
+						{
+							std::cout << "invalid tag: " << tag << std::endl;
+							continue;
+						}
+
+						if( m_setResolvedProjectStructure.find(tag) != m_setResolvedProjectStructure.end() )
+						{
+							continue;
+						}
+						m_setResolvedProjectStructure.insert(tag);
+
 						if( related_obj_def->m_GlobalId )
 						{
-							related_guid = related_obj_def->m_GlobalId->m_value;
-						}
-
-						if( related_guid.size() < 20 )
-						{
-							std::cout << "guid invalid: " << related_guid << std::endl;
-							continue;
-						}
-
-						if( m_setResolvedProjectStructure.find(related_guid) != m_setResolvedProjectStructure.end() )
-						{
-							continue;
-						}
-						m_setResolvedProjectStructure.insert(related_guid);
-
-
-						auto it_product_map = m_product_shape_data.find(related_guid);
-						if( it_product_map != m_product_shape_data.end() )
-						{
-							shared_ptr<ProductShapeData>& related_product_shape = it_product_map->second;
-							if( related_product_shape )
+							std::string guid = related_obj_def->m_GlobalId->m_value;
+							auto it_product_map = m_product_shape_data.find(guid);
+							if( it_product_map != m_product_shape_data.end() )
 							{
-								product_data->addChildProduct(related_product_shape, product_data);
-								resolveProjectStructure(related_product_shape, resolveSecondaryStructure);
+								shared_ptr<ProductShapeData>& related_product_shape = it_product_map->second;
+								if( related_product_shape )
+								{
+									product_data->addChildProduct(related_product_shape, product_data);
+									resolveProjectStructure(related_product_shape, resolveSecondaryStructure);
+								}
 							}
 						}
 					}
@@ -292,33 +296,32 @@ public:
 						const shared_ptr<IfcProduct>& related_product = vec_related_elements[jj];
 						if( related_product )
 						{
-							std::string related_guid;
+							int tag = related_product->m_tag;
+							if( tag < 0 )
+							{
+								std::cout << "tag invalid: " << tag << std::endl;
+								continue;
+							}
+
+							if( m_setResolvedProjectStructure.find(tag) != m_setResolvedProjectStructure.end() )
+							{
+								continue;
+							}
+							m_setResolvedProjectStructure.insert(tag);
+
 							if( related_product->m_GlobalId )
 							{
-								related_guid = related_product->m_GlobalId->m_value;
-							}
+								std::string related_guid = related_product->m_GlobalId->m_value;
 
-							if( related_guid.size() < 20 )
-							{
-								std::cout << "guid invalid: " << related_guid << std::endl;
-								continue;
-							}
-
-							if( m_setResolvedProjectStructure.find(related_guid) != m_setResolvedProjectStructure.end() )
-							{
-								//std::cout << "duplicate guid in model tree: " << related_guid << std::endl;
-								continue;
-							}
-							m_setResolvedProjectStructure.insert(related_guid);
-
-							auto it_product_map = m_product_shape_data.find(related_guid);
-							if( it_product_map != m_product_shape_data.end() )
-							{
-								shared_ptr<ProductShapeData>& related_product_shape = it_product_map->second;
-								if( related_product_shape )
+								auto it_product_map = m_product_shape_data.find(related_guid);
+								if( it_product_map != m_product_shape_data.end() )
 								{
-									product_data->addChildProduct(related_product_shape, product_data);
-									resolveProjectStructure(related_product_shape, resolveSecondaryStructure);
+									shared_ptr<ProductShapeData>& related_product_shape = it_product_map->second;
+									if( related_product_shape )
+									{
+										product_data->addChildProduct(related_product_shape, product_data);
+										resolveProjectStructure(related_product_shape, resolveSecondaryStructure);
+									}
 								}
 							}
 						}
@@ -326,7 +329,7 @@ public:
 				}
 			}
 		}
-	
+
 		if( resolveSecondaryStructure )
 		{
 			// handle IfcRelAssigns
@@ -367,33 +370,33 @@ public:
 
 							for( auto related_object : groupedBy->m_RelatedObjects )
 							{
-								std::string related_guid;
-								if( related_object->m_GlobalId )
+								int tag = related_object->m_tag;
+								if( tag < 0 )
 								{
-									related_guid = related_object->m_GlobalId->m_value;
-								}
-
-								if( related_guid.size() < 20 )
-								{
-									std::cout << "guid invalid: " << related_guid << std::endl;
+									std::cout << "tag invalid: " << tag << std::endl;
 									continue;
 								}
 
-								if( m_setResolvedProjectStructure.find(related_guid) != m_setResolvedProjectStructure.end() )
+								if( m_setResolvedProjectStructure.find(tag) != m_setResolvedProjectStructure.end() )
 								{
 									// std::cout << "duplicate guid in model tree: " << related_guid << std::endl;
 									continue;
 								}
-								m_setResolvedProjectStructure.insert(related_guid);
+								m_setResolvedProjectStructure.insert(tag);
 
-								auto it_product_map = m_product_shape_data.find(related_guid);
-								if( it_product_map != m_product_shape_data.end() )
+								if( related_object->m_GlobalId )
 								{
-									shared_ptr<ProductShapeData>& related_product_shape = it_product_map->second;
-									if( related_product_shape )
+									std::string related_guid = related_object->m_GlobalId->m_value;
+
+									auto it_product_map = m_product_shape_data.find(related_guid);
+									if( it_product_map != m_product_shape_data.end() )
 									{
-										product_data->addChildProduct(related_product_shape, product_data);
-										resolveProjectStructure(related_product_shape, resolveSecondaryStructure);
+										shared_ptr<ProductShapeData>& related_product_shape = it_product_map->second;
+										if( related_product_shape )
+										{
+											product_data->addChildProduct(related_product_shape, product_data);
+											resolveProjectStructure(related_product_shape, resolveSecondaryStructure);
+										}
 									}
 								}
 							}
@@ -428,33 +431,33 @@ public:
 							//shared_ptr<IfcPort>					m_RelatingPort;
 							//shared_ptr<IfcDistributionElement>	m_RelatedElement;
 
-							std::string related_guid;
-							if( related_object->m_GlobalId )
-							{
-								related_guid = related_object->m_GlobalId->m_value;
-							}
+							int tag = related_object->m_tag;
 
-							if( related_guid.size() < 20 )
+							if( tag < 0 )
 							{
-								std::cout << "guid invalid: " << related_guid << std::endl;
+								std::cout << "tag invalid: " << tag << std::endl;
 								continue;
 							}
 
-							if( m_setResolvedProjectStructure.find(related_guid) != m_setResolvedProjectStructure.end() )
+							if( m_setResolvedProjectStructure.find(tag) != m_setResolvedProjectStructure.end() )
 							{
 								// std::cout << "duplicate guid in model tree: " << related_guid << std::endl;
 								continue;
 							}
-							m_setResolvedProjectStructure.insert(related_guid);
+							m_setResolvedProjectStructure.insert(tag);
 
-							auto it_product_map = m_product_shape_data.find(related_guid);
-							if( it_product_map != m_product_shape_data.end() )
+							if( related_object->m_GlobalId )
 							{
-								shared_ptr<ProductShapeData>& related_product_shape = it_product_map->second;
-								if( related_product_shape )
+								std::string related_guid = related_object->m_GlobalId->m_value;
+								auto it_product_map = m_product_shape_data.find(related_guid);
+								if( it_product_map != m_product_shape_data.end() )
 								{
-									product_data->addChildProduct(related_product_shape, product_data);
-									resolveProjectStructure(related_product_shape, resolveSecondaryStructure);
+									shared_ptr<ProductShapeData>& related_product_shape = it_product_map->second;
+									if( related_product_shape )
+									{
+										product_data->addChildProduct(related_product_shape, product_data);
+										resolveProjectStructure(related_product_shape, resolveSecondaryStructure);
+									}
 								}
 							}
 						}
@@ -470,10 +473,9 @@ public:
 		std::map<std::string, shared_ptr<ProductShapeData> >& map_shapeInputData = getShapeInputData();
 		shared_ptr<BuildingModel> ifc_model = getBuildingModel();
 		shared_ptr<IfcProject> ifc_project = ifc_model->getIfcProject();
-		shared_ptr<IfcSite> ifc_site;
-
+		std::vector<shared_ptr<IfcSite> > vec_ifc_sites;
 		std::vector<shared_ptr<ProductShapeData> > vec_ifc_buildings;
-		
+
 		for( auto it : map_shapeInputData )
 		{
 			std::string guid = it.first;
@@ -505,7 +507,7 @@ public:
 				shared_ptr<IfcSite> site = dynamic_pointer_cast<IfcSite>(ifc_object_definition);
 				if( site )
 				{
-					ifc_site = site;
+					vec_ifc_sites.push_back( site );
 					continue;
 				}
 			}
@@ -522,7 +524,7 @@ public:
 		}
 
 		// if IfcBuilding is not connected to IfcSite and IfcProject, find IfcSite, and connect it
-		if( ifc_site )
+		for( auto ifc_site : vec_ifc_sites )
 		{
 			for( auto product_shape_building : vec_ifc_buildings )
 			{
@@ -798,8 +800,7 @@ public:
 						if( m_callback_object_geometry_converted )
 						{
 #ifdef _OPENMP
-							// Note: this lock protects accesses only for this instance. If several StatusCallback (or derived) objects are bound to the same callback function, a lock is necessary there.
-							ScopedLock lock( m_writelock );
+							//ScopedLock lock( m_writelock_geom_callback );
 #endif
 							m_callback_func_geometry_converted( m_callback_object_geometry_converted, product_geom_input_data );
 						}
@@ -808,7 +809,7 @@ public:
 
 				// progress callback
 				double progress = (double)i / (double)num_object_definitions;
-				if( progress - m_recent_progress > 0.02 )
+				if( progress - m_recent_progress > 0.01 )
 				{
 
 #ifdef _OPENMP
@@ -825,7 +826,7 @@ public:
 		} // implicit barrier
 #endif
 
-		// subtract openings in related objects, such as IFCBUILDINGELEMENTPART connected to a window through IFCRELAGGREGATES
+		  // subtract openings in related objects, such as IFCBUILDINGELEMENTPART connected to a window through IFCRELAGGREGATES
 		for( auto it = map_products_ptr->begin(); it != map_products_ptr->end(); ++it )
 		{
 			shared_ptr<ProductShapeData> product_geom_input_data = it->second;
@@ -878,13 +879,13 @@ public:
 					if( !product_shape->m_ifc_object_definition.expired() )
 					{
 						shared_ptr<IfcObjectDefinition> ifc_object_def( product_shape->m_ifc_object_definition );
-						
-						if( !m_geom_settings->skipRenderObject(ifc_object_def->classID()) )
+
+						if( m_geom_settings->skipRenderObject(ifc_object_def->classID()) )
 						{
 							continue;
 						}
 						std::string guid;
-						
+
 						if (ifc_object_def->m_GlobalId)
 						{
 							guid = ifc_object_def->m_GlobalId->m_value;
@@ -1056,9 +1057,47 @@ public:
 				}
 			}
 		}
+
+		// check for existing meshes
+		// TODO: make sure that the meshes are not changed after here, for example with boolean operations
+		bool enableCaching = false;
+		if( enableCaching )
+		{
+			bool equalItemFound = false;
+
+			for( auto it : m_product_shape_data )
+			{
+				const shared_ptr<ProductShapeData>& existingProductShape = it.second;
+				if( !existingProductShape )
+				{
+					continue;
+				}
+				for( auto rep : existingProductShape->m_vec_representations )
+				{
+					for( auto item : rep->m_vec_item_data )
+					{
+						//bool itemIsEqual = isEqual(item, geom_item_data);
+						//if( itemIsEqual )
+						{
+							//representation_data->m_vec_item_data.push_back(existingItem);
+							equalItemFound = true;
+						}
+					}
+				}
+			}
+			if( !equalItemFound )
+			{
+				//				representation_data->m_vec_item_data.push_back(geom_item_data);
+				//#ifdef _OPENMP
+				//				ScopedLock lock( m_writelock_item_cache );
+				//#endif
+				//				m_map_item_data_cache.push_back(geom_item_data);
+			}
+		}
+
 		if( m_clear_memory_immedeately )
 		{
-			vec_representations.clear();
+			ifc_product->m_Representation.reset();
 		}
 	}
 
@@ -1143,7 +1182,7 @@ public:
 				if (related_object->m_GlobalId)
 				{
 					guid = related_object->m_GlobalId->m_value;
-				
+
 					auto it_find_related_shape = m_product_shape_data.find(guid);
 					if( it_find_related_shape != m_product_shape_data.end() )
 					{

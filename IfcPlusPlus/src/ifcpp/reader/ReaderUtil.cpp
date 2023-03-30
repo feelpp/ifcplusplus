@@ -17,14 +17,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 
 #define _USE_MATH_DEFINES
 #include <cmath>
-#include <cctype>
-#include <codecvt>
 #include <iostream>
 #include <limits>
 #include <locale>
 #include <string>
 
-#include "utf8/cpp17.h"
 #include "ifcpp/model/BuildingException.h"
 #include "ReaderUtil.h"
 
@@ -33,6 +30,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 #endif
 #ifdef _MSC_VER
 #include <windows.h>
+#else
+#include <cctype>
+#include <codecvt>
 #endif
 
 static short convertToHex(unsigned char mc)
@@ -64,12 +64,6 @@ static char Hex2Char(unsigned char h1, unsigned char h2 )
 	return (returnValue);
 }
 
-static char Hex4Char(unsigned char h1, unsigned char h2, unsigned char h3, unsigned char h4 )
-{
-	char returnValue = (convertToHex(h1)<< 12) + (convertToHex(h2) << 8) +(convertToHex(h3) << 4) + convertToHex(h4);
-	return (returnValue);
-}
-
 std::string wstring2string(const std::wstring& wstr)
 {
 	if( wstr.empty() ) return std::string();
@@ -78,18 +72,6 @@ std::string wstring2string(const std::wstring& wstr)
 	int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
 	std::string strTo( size_needed, 0 );
 	WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
-
-#ifdef _DEBUG
-	{
-		std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> StringConverter;
-		std::string strTo_check = StringConverter.to_bytes(wstr);
-		if( strTo_check.compare(strTo) != 0 )
-		{
-			std::cout << "wstring2string check failed" << std::endl;
-		}
-	}
-#endif
-
 	return strTo;
 #else
 
@@ -148,6 +130,171 @@ void checkOpeningClosingParenthesis( const char* ch_check )
 		std::stringstream err;
 		err << "checkOpeningClosingParenthesis: num_opening != num_closing " << std::endl;
 		throw BuildingException( err.str(), __FUNC__ );
+	}
+}
+
+std::istream& bufferedGetline(std::istream& inputStream, std::string& lineOut)
+{
+	lineOut.clear();
+	std::istream::sentry se(inputStream, true);
+	std::streambuf* sb = inputStream.rdbuf();
+
+	// std::getline does not work with all line endings, reads complete file instead.
+	// Handle \n (unix), \r\n (windows), \r (mac) line endings here
+	while(true)
+	{
+		int c = sb->sbumpc();
+		switch (c)
+		{
+		case '\n':
+			return inputStream;
+		case '\r':
+			if( sb->sgetc() == '\n' )
+			{
+				sb->sbumpc();
+			}
+			return inputStream;
+		case std::streambuf::traits_type::eof():
+			// in case the last line has no line ending
+			if( lineOut.empty() )
+			{
+				inputStream.setstate(std::ios::eofbit);
+			}
+			return inputStream;
+		default:
+			lineOut += (char)c;
+		}
+	}
+}
+
+std::istream& bufferedGetStepLine(std::istream& inputStream, std::string& lineOut)
+{
+	lineOut.clear();
+	std::istream::sentry se(inputStream, true);
+	std::streambuf* sb = inputStream.rdbuf();
+	bool inString = false;
+
+	// std::getline does not work with all line endings, reads complete file instead.
+	// Handle \n (unix), \r\n (windows), \r (mac) line endings here
+	while(true)
+	{
+		int c = sb->sbumpc();
+#ifdef _DEBUG
+		std::string charAsString;
+		charAsString += ((char)c);
+#endif
+		switch (c)
+		{
+		case ';':
+		{
+			if( !inString )
+			{
+				int nextChar = sb->sgetc();
+				if( isspace(nextChar) )
+				{
+					sb->sbumpc();  // sbumpc: character at the current position and advances the current position to the next character
+				}
+				return inputStream;
+			}
+			lineOut += (char)c;
+			continue;
+		}
+		case '\'':
+			if( sb->sgetc() != '/' )  // sgetc: character at the current position
+			{
+				inString = !inString;
+			}
+			lineOut += (char)c;
+			continue;
+		case '/':
+			if( !inString )
+			{
+				int nextChar = sb->sgetc();
+#ifdef _DEBUG
+				std::string charAsString2;
+				charAsString2 += ((char)nextChar);
+#endif
+				if( nextChar == '*' )
+				{
+#ifdef _DEBUG
+					std::string commentIgnored = "/*";
+#endif
+					sb->sbumpc();
+
+					// continue till end of /*   */ comment
+					bool inMultiLineComment = true;
+					while( inMultiLineComment )
+					{
+						int c2 = sb->sbumpc();
+						switch( c2 )
+						{
+						case '*':
+						{
+							char c3 = sb->sgetc();
+							if( c3 == '/' )
+							{
+								sb->sbumpc();
+								inMultiLineComment = false;
+
+								// skip whitespaces
+								while(true)
+								{
+									char c4 = sb->sgetc();
+									if( isspace(c4) )
+									{
+										sb->sbumpc();
+									}
+									else if( c4 == std::streambuf::traits_type::eof() )
+									{
+										if( lineOut.empty() )
+										{
+											inputStream.setstate(std::ios::eofbit);
+										}
+										return inputStream;
+									}
+									else
+									{
+										break;
+									}
+								}
+
+								break;
+							}
+						}
+						case std::streambuf::traits_type::eof():
+							// in case the last line has no line ending
+							if( lineOut.empty() )
+							{
+								inputStream.setstate(std::ios::eofbit);
+							}
+							return inputStream;
+						}
+#ifdef _DEBUG
+						commentIgnored += c2;
+#endif
+					}
+					continue;
+				}
+			}
+			lineOut += (char)c;
+			continue;
+
+		case '\n':
+			continue;
+
+		case '\r':
+			continue;
+
+		case std::streambuf::traits_type::eof():
+			// in case the last line has no line ending
+			if( lineOut.empty() )
+			{
+				inputStream.setstate(std::ios::eofbit);
+			}
+			return inputStream;
+		default:
+			lineOut += (char)c;
+		}
 	}
 }
 
@@ -287,7 +434,7 @@ void tokenizeList( std::string& list_str, std::vector<std::string>& list_items )
 			++stream_pos;
 			continue;
 		}
-		
+
 		if( *stream_pos == ',' && numNestedLists == 0)
 		{
 			std::string item( last_token, stream_pos-last_token );
@@ -326,7 +473,7 @@ void tokenizeEntityList( std::string& list_str, std::vector<int>& list_items )
 	{
 		// skip whitespace
 		while( isspace( *stream_pos ) ) { ++stream_pos; }
-		
+
 		if( *stream_pos == '#' )
 		{
 			++stream_pos;
@@ -397,7 +544,7 @@ void readIntegerList( const std::string& str, std::vector<int>& vec )
 		}
 		++i;
 	}
-	
+
 	while( i<argsize )
 	{
 		if( ch[i] == ',' )
@@ -732,7 +879,7 @@ void findEndOfString( const char*& stream_pos )
 				continue;
 			}
 		}
-				
+
 		if( *stream_pos == '\'' )
 		{
 			if( *(stream_pos+1) == '\'' )
@@ -765,8 +912,7 @@ void decodeArgumentStrings( std::vector<std::string>& entity_arguments, std::vec
 		}
 
 		std::string arg_str_new;
-		arg_str_new.reserve(arg_length);
-
+		
 		char* stream_pos = const_cast<char*>(argument_str.c_str());		// ascii characters from STEP file
 		while( *stream_pos != '\0' )
 		{
@@ -853,15 +999,41 @@ void decodeArgumentStrings( std::vector<std::string>& entity_arguments, std::vec
 							bool finished = false;
 							stream_pos += 4;
 
+							std::vector<char> utf16Characters;
 							do
 							{
-								char c = Hex4Char(*(stream_pos), *(stream_pos+1), *(stream_pos+2), *(stream_pos+3));
-								//unsigned char char_ascii = wctob(wc);
-								arg_str_new += c;
+								char h1 = *(stream_pos);
+								char h2 = *(stream_pos + 1);
+								char h3 = *(stream_pos + 2);
+								char h4 = *(stream_pos + 3);
+
+								char c1 = Hex2Char(h1, h2);
+								char c2 = Hex2Char(h3, h4);
+								utf16Characters.push_back(c1);
+								utf16Characters.push_back(c2);
+								
 								stream_pos += 4;
 
 							} while (( *stream_pos != '\0' ) && ( *stream_pos != '\\' ));
 
+							for (int i = 0; i < utf16Characters.size(); i+=2)
+							{
+								std::swap(utf16Characters[i], utf16Characters[i + 1]);
+							}
+
+#ifdef _MSC_VER
+							std::wstring w_str(reinterpret_cast<wchar_t*>(&utf16Characters[0]), utf16Characters.size() / 2);
+							std::string convertedStr = wstring2string(w_str);
+							arg_str_new += convertedStr;
+#else
+							std::u16string u16str(reinterpret_cast<char16_t*>(&utf16Characters[0]), utf16Characters.size() / 2);
+							std::wstring_convert<std::codecvt_utf8_utf16<char16_t>,char16_t> convert; 
+							std::string utf8 = convert.to_bytes(u16str);
+							arg_str_new += utf8;
+#endif
+
+
+							
 							continue;
 						}
 					}
@@ -876,13 +1048,14 @@ void decodeArgumentStrings( std::vector<std::string>& entity_arguments, std::vec
 					}
 				}
 			}
-					
+
 			char current_char = *stream_pos;
 			arg_str_new += current_char;
 			++stream_pos;
 		}
-		
+
 		args_out.push_back( arg_str_new );
+
 	}
 }
 
@@ -1071,7 +1244,7 @@ void tokenizeInlineArgument( std::string arg, std::string& keyword, std::string&
 
 	// get type name
 	std::string key( begin_keyword, stream_pos-begin_keyword );
-	
+
 	if( key.empty() )
 	{
 		// single argument, for example .T.
@@ -1103,7 +1276,7 @@ void tokenizeInlineArgument( std::string arg, std::string& keyword, std::string&
 	// proceed to ')'
 	std::string inline_argument;
 	char* inline_argument_begin = stream_pos;
-	
+
 	while( *stream_pos != '\0' )
 	{
 		if( *stream_pos == '\'' )
