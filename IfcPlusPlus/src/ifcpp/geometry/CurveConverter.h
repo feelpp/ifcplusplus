@@ -125,7 +125,7 @@ public:
 		std::vector<shared_ptr<IfcTrimmingSelect> >& trim1_vec, std::vector<shared_ptr<IfcTrimmingSelect> >& trim2_vec, bool senseAgreement) const
 	{
 		double lengthFactor = m_point_converter->getUnitConverter()->getLengthInMeterFactor();
-		double CARVE_EPSILON = m_geom_settings->getEpsilonCoplanarDistance();
+		double CARVE_EPSILON = m_geom_settings->getEpsilonMergePoints();
 
 		//	ENTITY IfcCurve ABSTRACT SUPERTYPE OF	(ONEOF(IfcBoundedCurve, IfcConic, IfcLine, IfcOffsetCurve2D, IfcOffsetCurve3D, IfcPCurve))
 		shared_ptr<IfcBoundedCurve> bounded_curve = dynamic_pointer_cast<IfcBoundedCurve>(ifc_curve);
@@ -387,18 +387,14 @@ public:
 		if( conic )
 		{
 			// ENTITY IfcConic ABSTRACT SUPERTYPE OF(ONEOF(IfcCircle, IfcEllipse))
-			shared_ptr<TransformData> conic_position_matrix;
+			shared_ptr<TransformData> conic_position_matrix( new TransformData() );
 			shared_ptr<IfcPlacement> conic_placement = dynamic_pointer_cast<IfcPlacement>(conic->m_Position);
 			if( conic_placement )
 			{
 				m_placement_converter->convertIfcPlacement(conic_placement, conic_position_matrix, false);
 			}
 
-			vec3 circle_center;
-			if( conic_position_matrix )
-			{
-				circle_center = conic_position_matrix->m_matrix * carve::geom::VECTOR(0, 0, 0);
-			}
+			vec3 circle_center = conic_position_matrix->m_matrix * carve::geom::VECTOR(0, 0, 0);
 
 			double circle_radius = -1;
 			double circle_radius2 = -1;
@@ -428,6 +424,7 @@ public:
 
 			carve::math::Matrix circlePositionInverse;
 			GeomUtils::computeInverse(conic_position_matrix->m_matrix, circlePositionInverse);
+
 			double maxRadius = std::max(circle_radius, circle_radius2);
 			double trimAngle1 = 0.0;
 			double trimAngle2 = M_PI * 2.0;
@@ -497,7 +494,7 @@ public:
 #ifdef _DEBUG
 			if( openingAngle > M_PI*1.01 )
 			{
-				glm::dvec4 color(0.2, 0.2, 0.2, 0.8);
+				glm::vec4 color(0.2, 0.2, 0.2, 0.8);
 				GeomDebugDump::dumpPolyline(target_vec, color, true);
 			}
 #endif
@@ -535,7 +532,7 @@ public:
 				line_direction.normalize();
 
 				// line_vec->m_Magnitude;  can be ignored here, since it is a direction
-				
+
 
 				// check for trimming at beginning of line
 				double start_parameter = 0.0;
@@ -842,7 +839,7 @@ public:
 		bool p1_success = PointConverter::convertIfcVertex(edge_end, p1, length_factor);
 
 
-		
+
 
 		bool simpleStraightEdge = false;
 		if( simpleStraightEdge )
@@ -902,7 +899,7 @@ public:
 			std::vector<vec3> segmentStartPoints;
 			const shared_ptr<IfcCurve> edgeCurveGeometry = edgeCurve->m_EdgeGeometry;
 			bool senseAgreement = true;
-			
+
 			if( edgeCurveGeometry )
 			{
 				shared_ptr<IfcTrimmedCurve> trimmedCurve = dynamic_pointer_cast<IfcTrimmedCurve>(edgeCurveGeometry);
@@ -964,7 +961,7 @@ public:
 				{
 					//GeomDebugDump::dumpPolyline(curvePoints, color, false);
 				}
-				
+
 				if( dist0 > EPS_M6 )
 				{
 					int tag = edgeCurve->m_tag;
@@ -981,7 +978,7 @@ public:
 					shared_ptr<IfcCurve> edgeGeometry = edgeCurve->m_EdgeGeometry;
 					if( edgeGeometry )
 					{
-						
+
 
 						const shared_ptr<IfcTrimmedCurve> trimmedCurve = dynamic_pointer_cast<IfcTrimmedCurve>(edgeGeometry);
 						if( trimmedCurve )
@@ -1041,7 +1038,7 @@ public:
 			std::copy(curvePoints.begin(), curvePoints.end(), std::back_inserter(loopPoints));
 			return;
 		}
-		
+
 		std::cout << "IfcEdge: " << EntityFactory::getStringForClassID( edge->classID() ) << " not implemented" << std::endl;
 	}
 

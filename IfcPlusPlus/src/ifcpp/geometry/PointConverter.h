@@ -23,6 +23,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 #include <ifcpp/model/BasicTypes.h>
 #include <ifcpp/model/StatusCallback.h>
 #include <ifcpp/model/UnitConverter.h>
+#include <ifcpp/IFC4X3/EntityFactory.h>
 #include <IfcCartesianPoint.h>
 #include <IfcCurve.h>
 #include <IfcLengthMeasure.h>
@@ -31,8 +32,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 #include <IfcTrimmingSelect.h>
 #include <IfcVertex.h>
 #include <IfcVertexPoint.h>
-
+#include "GeomUtils.h"
 #include "IncludeCarveHeaders.h"
+
+using namespace IFC4X3;
 
 //\brief class to convert IFC point representations into carve input geometry
 class PointConverter : public StatusCallback
@@ -351,10 +354,9 @@ public:
 			}
 		}
 
-
 		double angle = resultAngle;
 		size_t smallestDistanceAngle = resultAngle;
-		double angleStep = 0.1;// deltaAngle * 0.2;
+		double angleStep = 0.1;
 		double x0 = smallestDistanceAngle;
 		double x1 = smallestDistanceAngle + angleStep;
 		double x2 = x1;
