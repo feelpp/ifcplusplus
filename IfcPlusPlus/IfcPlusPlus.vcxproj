@@ -211,7 +211,6 @@
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <PreprocessorDefinitions>UNICODE;WIN32;_WINDOWS;NDEBUG;_MBCS;IFCQUERY_AS_DYNAMIC_LIBRARY;IFCQUERY_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
-      <OpenMPSupport>true</OpenMPSupport>
       <DebugInformationFormat />
     </ClCompile>
     <Link>
@@ -258,12 +257,11 @@
       <EnableParallelCodeGeneration>true</EnableParallelCodeGeneration>
       <FloatingPointExceptions>true</FloatingPointExceptions>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
-      <OpenMPSupport>true</OpenMPSupport>
       <WholeProgramOptimization>true</WholeProgramOptimization>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <AdditionalOptions>
       </AdditionalOptions>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DebugInformationFormat>None</DebugInformationFormat>
       <ObjectFileName>$(IntDir)/%(RelativeDir)/</ObjectFileName>
       <InlineFunctionExpansion>Default</InlineFunctionExpansion>
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
@@ -306,7 +304,6 @@
       <EnableParallelCodeGeneration>true</EnableParallelCodeGeneration>
       <FloatingPointExceptions>true</FloatingPointExceptions>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
-      <OpenMPSupport>true</OpenMPSupport>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -329,7 +326,6 @@
       <EnableParallelCodeGeneration>true</EnableParallelCodeGeneration>
       <FloatingPointExceptions>true</FloatingPointExceptions>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
-      <OpenMPSupport>true</OpenMPSupport>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -398,6 +394,9 @@
     <ClInclude Include="src\ifcpp\geometry\GeometryInputData.h" />
     <ClInclude Include="src\ifcpp\geometry\GeomUtils.h" />
     <ClInclude Include="src\ifcpp\geometry\IncludeCarveHeaders.h" />
+    <ClInclude Include="src\ifcpp\geometry\MeshNormalizer.h" />
+    <ClInclude Include="src\ifcpp\geometry\MeshOps.h" />
+    <ClInclude Include="src\ifcpp\geometry\MeshSimplifier.h" />
     <ClInclude Include="src\ifcpp\geometry\PlacementConverter.h" />
     <ClInclude Include="src\ifcpp\geometry\PointConverter.h" />
     <ClInclude Include="src\ifcpp\geometry\ProfileCache.h" />
@@ -411,6 +410,8 @@
     <ClInclude Include="src\ifcpp\geometry\GeometrySettings.h" />
     <ClInclude Include="src\ifcpp\geometry\SceneGraphUtils.h" />
     <ClInclude Include="src\ifcpp\geometry\StylesConverter.h" />
+    <ClInclude Include="src\ifcpp\IFC4X3\EntityFactory.h" />
+    <ClInclude Include="src\ifcpp\IFC4X3\TypeFactory.h" />
     <ClInclude Include="src\ifcpp\IFC4\EntityFactory.h" />
     <ClInclude Include="src\ifcpp\IFC4\TypeFactory.h" />
     <ClInclude Include="src\ifcpp\model\AttributeObject.h" />
@@ -420,7 +421,6 @@
     <ClInclude Include="src\ifcpp\model\BuildingModel.h" />
     <ClInclude Include="src\ifcpp\model\BuildingObject.h" />
     <ClInclude Include="src\ifcpp\model\GlobalDefines.h" />
-    <ClInclude Include="src\ifcpp\model\OpenMPIncludes.h" />
     <ClInclude Include="src\ifcpp\model\StatusCallback.h" />
     <ClInclude Include="src\ifcpp\model\UnitConverter.h" />
     <ClInclude Include="src\ifcpp\model\UnknownEntityException.h" />

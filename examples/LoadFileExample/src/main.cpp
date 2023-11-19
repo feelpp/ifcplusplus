@@ -33,15 +33,11 @@ public:
 
 	}
 
-	static void slotMessageWrapper(void* ptr, shared_ptr<StatusCallback::Message> m)
+	void slotMessageWrapper(shared_ptr<StatusCallback::Message> m)
 	{
-		MessageHandler* myself = (MessageHandler*)ptr;
-		if( myself )
 		{
 			// log file etc can be implemented here
-#ifdef IFCPP_OPENMP
-			ScopedLock lock(myself->m_mutex_messages);
-#endif
+			std::lock_guard<std::mutex> lock(m_mutex_messages);
 
 			StatusCallback::MessageType mType = m->m_message_type;
 			if( mType == StatusCallback::MESSAGE_TYPE_PROGRESS_VALUE )
@@ -75,9 +71,7 @@ public:
 		}
 	}
 
-#ifdef IFCPP_OPENMP
-	Mutex m_mutex_messages;
-#endif
+	std::mutex m_mutex_messages;
 };
 
 shared_ptr<MyIfcTreeItem> resolveTreeItems(shared_ptr<BuildingObject> obj, std::unordered_set<int>& set_visited)
@@ -161,62 +155,75 @@ shared_ptr<MyIfcTreeItem> resolveTreeItems(shared_ptr<BuildingObject> obj, std::
 	return item;
 }
 
+void resolveGeometricItems(shared_ptr<ItemShapeData>& geometricItem, carve::math::Matrix& localTransform)
+{
+	// closed meshes
+	for (auto meshset : geometricItem->m_meshsets)
+	{
+		std::vector<carve::mesh::Vertex<3> >& vertexData = meshset->vertex_storage;
+		for (auto mesh : meshset->meshes)
+		{
+			for (auto face : mesh->faces)
+			{
+				carve::mesh::Edge<3>* edge = face->edge;
+				for (size_t ii = 0; ii < face->n_edges; ++ii)
+				{
+					carve::mesh::Vertex<3>* vertex = edge->vert;
+					carve::geom::vector<3> pointLocal = vertex->v;
+					carve::geom::vector<3> pointGlobal = localTransform * pointLocal;
+					double x = pointGlobal.x;
+					double y = pointGlobal.y;
+					double z = pointGlobal.z;
+					std::cout << "point in mesh: (" << x << "/" << y << "/" << z << ")" << std::endl;
+				}
+			}
+		}
+	}
+
+	// open meshes
+	for (auto meshset : geometricItem->m_meshsets_open)
+	{
+		std::vector<carve::mesh::Vertex<3> >& vertexData = meshset->vertex_storage;
+		for (auto mesh : meshset->meshes)
+		{
+			for (auto face : mesh->faces)
+			{
+				carve::mesh::Edge<3>* edge = face->edge;
+				for (size_t ii = 0; ii < face->n_edges; ++ii)
+				{
+					carve::mesh::Vertex<3>* vertex = edge->vert;
+					carve::geom::vector<3> pointLocal = vertex->v;
+					carve::geom::vector<3> pointGlobal = localTransform * pointLocal;
+					double x = pointGlobal.x;
+					double y = pointGlobal.y;
+					double z = pointGlobal.z;
+					std::cout << "point in mesh: (" << x << "/" << y << "/" << z << ")" << std::endl;
+				}
+			}
+		}
+	}
+
+	// traverse geometry
+	for (auto childItem : geometricItem->m_child_items)
+	{
+		resolveGeometricItems(childItem, localTransform);
+	}
+}
+
 void resolveShapeData(shared_ptr<ProductShapeData>& shapeData)
 {
 	carve::math::Matrix localTransform = shapeData->getTransform();
 
 	// traverse geometry
-	for (auto geometricItem : shapeData->m_geometric_items)
+	for (auto geometricItem : shapeData->getGeometricItems())
 	{
-		// closed meshes
-		for (auto meshset : geometricItem->m_meshsets)
-		{
-			std::vector<carve::mesh::Vertex<3> >& vertexData = meshset->vertex_storage;
-			for (auto mesh : meshset->meshes)
-			{
-				for (auto face : mesh->faces)
-				{
-					carve::mesh::Edge<3>* edge = face->edge;
-					for (size_t ii = 0; ii < face->n_edges; ++ii)
-					{
-						carve::mesh::Vertex<3>* vertex = edge->vert;
-						carve::geom::vector<3> pointLocal = vertex->v;
-						carve::geom::vector<3> pointGlobal = localTransform * pointLocal;
-						double x = pointGlobal.x;
-						double y = pointGlobal.y;
-						double z = pointGlobal.z;
-						std::cout << "point in mesh: (" << x << "/" << y << "/" << z << ")" << std::endl;
-					}
-				}
-			}
-		}
-
-		// open meshes
-		for (auto meshset : geometricItem->m_meshsets_open)
-		{
-			std::vector<carve::mesh::Vertex<3> >& vertexData = meshset->vertex_storage;
-			for (auto mesh : meshset->meshes)
-			{
-				for (auto face : mesh->faces)
-				{
-					carve::mesh::Edge<3>* edge = face->edge;
-					for (size_t ii = 0; ii < face->n_edges; ++ii)
-					{
-						carve::mesh::Vertex<3>* vertex = edge->vert;
-						carve::geom::vector<3> pointLocal = vertex->v;
-						carve::geom::vector<3> pointGlobal = localTransform * pointLocal;
-						double x = pointGlobal.x;
-						double y = pointGlobal.y;
-						double z = pointGlobal.z;
-						std::cout << "point in mesh: (" << x << "/" << y << "/" << z << ")" << std::endl;
-					}
-				}
-			}
-		}
+		// geometric items can have child items too
+		resolveGeometricItems(geometricItem, localTransform);
 	}
 	
-	for (auto child_object : shapeData->m_vec_children)
+	for (auto child_object : shapeData->getChildElements())
 	{
+		// child elements in case of IfcBuildingStorey, IfcElementAssembly etc.
 		resolveShapeData(child_object);
 	}
 }
@@ -229,14 +236,14 @@ int main()
 	MessageHandler mh;
 
 	shared_ptr<ReaderSTEP> step_reader(new ReaderSTEP());
-	step_reader->setMessageCallBack(&mh, &MessageHandler::slotMessageWrapper);
-
+	step_reader->setMessageCallBack(std::bind(&MessageHandler::slotMessageWrapper, &mh, std::placeholders::_1));
+	
 	// 2: load the model:
 	std::cout << "Loading IFC model: ";
 	step_reader->loadModelFromFile( "example.ifc", ifc_model);
 
 	shared_ptr<GeometryConverter> geometry_converter(new GeometryConverter(ifc_model));
-	geometry_converter->setMessageCallBack(&mh, &MessageHandler::slotMessageWrapper);
+	geometry_converter->setMessageCallBack(std::bind(&MessageHandler::slotMessageWrapper, &mh, std::placeholders::_1));
 	shared_ptr<GeometrySettings> geom_settings = geometry_converter->getGeomSettings();
 
 	// the number of vertices per circle can be changed here: (default is 14)

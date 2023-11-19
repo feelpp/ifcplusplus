@@ -126,9 +126,6 @@
     <ClInclude Include="src\ifcpp\model\BuildingObject.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
-    <ClInclude Include="src\ifcpp\model\OpenMPIncludes.h">
-      <Filter>Headerdateien</Filter>
-    </ClInclude>
     <ClInclude Include="src\ifcpp\model\BasicTypes.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
@@ -151,6 +148,21 @@
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="src\ifcpp\reader\AbstractReader.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ifcpp\geometry\MeshSimplifier.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ifcpp\geometry\MeshOps.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ifcpp\geometry\MeshNormalizer.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ifcpp\IFC4X3\EntityFactory.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ifcpp\IFC4X3\TypeFactory.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>
@@ -185,7 +197,6 @@
     <ClCompile Include="src\ifcpp\IFC4X3\TypeFactory.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    
     <ClCompile Include="src\external\Carve\src\common\geometry.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
