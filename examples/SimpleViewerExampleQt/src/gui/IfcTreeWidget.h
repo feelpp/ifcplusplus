@@ -18,6 +18,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 #pragma once
 
 #include <QtWidgets/QTreeWidget>
+#include <osg/Group>
 #include "ifcpp/model/BasicTypes.h"
 
 class BuildingEntity;
@@ -37,14 +38,16 @@ public:
 public slots:
 	void slotObjectsSelected( std::unordered_map<std::string, shared_ptr<BuildingEntity> >& map );
 	void slotTreewidgetSelectionChanged( QTreeWidgetItem* current, QTreeWidgetItem* previous );
-	void slotTreewidgetSelectionChanged();
 	void slotTreeWidgetItemDoubleClick( QTreeWidgetItem* item, int column );
 
 	void slotModelCleared();
 	void slotModelLoadingStart();
 	void slotModelLoadingDone();
 
+signals:
+	void signalZoomToObject(shared_ptr<BuildingEntity> object, osg::Group* node = 0);
+
 protected:
 	IfcPlusPlusSystem*	m_system;
-	bool				m_block_selection_signals;
+	bool				m_block_selection_signals = false;
 };

@@ -115,6 +115,7 @@ public:
 	shared_ptr<BuildingModel>& getBuildingModel() { return m_ifc_model; }
 	shared_ptr<RepresentationConverter>& getRepresentationConverter() { return m_representation_converter; }
 	shared_ptr<GeometrySettings>& getGeomSettings() { return m_geom_settings; }
+	void setGeomSettings(shared_ptr<GeometrySettings>& settings) { m_geom_settings = settings; }
 	std::map<std::string, shared_ptr<ProductShapeData> >& getShapeInputData() { return m_product_shape_data; }
 	std::map<std::string, shared_ptr<BuildingObject> >& getObjectsOutsideSpatialStructure() { return m_map_outside_spatial_structure; }
 	bool m_clear_memory_immedeately = true;
@@ -650,13 +651,13 @@ public:
 				if (!complex_property->m_UsageName) continue;
 				if (complex_property->m_UsageName->m_value.compare("Color") == 0)
 				{
-					vec4 vec_color;
+					glm::vec4 vec_color;
 					m_representation_converter->getStylesConverter()->convertIfcComplexPropertyColor(complex_property, vec_color);
 					shared_ptr<StyleData> style_data(new StyleData(-1));
 					style_data->m_apply_to_geometry_type = StyleData::GEOM_TYPE_ANY;
-					style_data->m_color_ambient.setColor(vec_color);
-					style_data->m_color_diffuse.setColor(vec_color);
-					style_data->m_color_specular.setColor(vec_color);
+					style_data->m_color_ambient = glm::vec4(vec_color);
+					style_data->m_color_diffuse = glm::vec4(vec_color);
+					style_data->m_color_specular = glm::vec4(vec_color);
 					style_data->m_shininess = 35.f;
 					product_shape->addStyle(style_data);
 				}
@@ -811,6 +812,18 @@ public:
 							break;
 						}
 						++guid_append;
+					}
+
+					// save "fixed" (at least unique) GUID
+					product_geom_input_data->m_entity_guid = guid;
+					if (!product_geom_input_data->m_ifc_object_definition.expired())
+					{
+						shared_ptr<IfcObjectDefinition> ifc_object_def(product_geom_input_data->m_ifc_object_definition);
+
+						if (ifc_object_def->m_GlobalId)
+						{
+							ifc_object_def->m_GlobalId->m_value = guid;
+						}
 					}
 				}
 

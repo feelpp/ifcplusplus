@@ -30,146 +30,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 
 using namespace IFC4X3;
 
-void polyhedronFromMeshSet(const shared_ptr<carve::mesh::MeshSet<3>>& meshset, const std::set<const carve::mesh::Face<3>* >& setSkipFaces, const std::set<const carve::mesh::Face<3>* >& setFlipFaces, PolyInputCache3D& polyInput)
-{
-	for (size_t ii = 0; ii < meshset->meshes.size(); ++ii)
-	{
-		carve::mesh::Mesh<3>* mesh = meshset->meshes[ii];
-
-		for (size_t jj = 0; jj < mesh->faces.size(); ++jj)
-		{
-			carve::mesh::Face<3>* face = mesh->faces[jj];
-
-			if (setSkipFaces.find(face) != setSkipFaces.end())
-			{
-				continue;
-			}
-
-			carve::mesh::Edge<3>* edge = face->edge;
-			if (edge)
-			{
-				std::vector<int> vecPointIndexes;
-				size_t maxNumEdges = 1000;
-				for (size_t kk = 0; kk < face->n_edges; ++kk)
-				{
-					vec3& edgeEndPoint = edge->v2()->v;
-					int idx = polyInput.addPoint(edgeEndPoint);
-					vecPointIndexes.push_back(idx);
-
-					edge = edge->next;
-					if (edge == face->edge)
-					{
-						break;
-					}
-				}
-				if (vecPointIndexes.size() < 3)
-				{
-#ifdef _DEBUG
-					std::cout << "face with < 3 edges" << std::endl;
-#endif
-					continue;
-				}
-
-				// TODO: fix polyline, detect overlapping edges
-				if (setFlipFaces.find(face) != setFlipFaces.end())
-				{
-					polyInput.m_poly_data->addFace(vecPointIndexes.rbegin(), vecPointIndexes.rend());
-				}
-				else
-				{
-					polyInput.m_poly_data->addFace(vecPointIndexes.begin(), vecPointIndexes.end());
-				}
-			}
-		}
-	}
-}
-
-void polyhedronFromMeshSet(const shared_ptr<carve::mesh::MeshSet<3>>& meshset, const std::set<const carve::mesh::Face<3>* >& setSkipFaces, PolyInputCache3D& polyInput)
-{
-	for (size_t ii = 0; ii < meshset->meshes.size(); ++ii)
-	{
-		carve::mesh::Mesh<3>* mesh = meshset->meshes[ii];
-
-		for (size_t jj = 0; jj < mesh->faces.size(); ++jj)
-		{
-			carve::mesh::Face<3>* face = mesh->faces[jj];
-
-			if (setSkipFaces.find(face) != setSkipFaces.end())
-			{
-				continue;
-			}
-
-			carve::mesh::Edge<3>* edge = face->edge;
-			if (edge)
-			{
-				std::vector<int> vecPointIndexes;
-				size_t maxNumEdges = 1000;
-				for (size_t kk = 0; kk < face->n_edges; ++kk)
-				{
-					vec3& edgeEndPoint = edge->v2()->v;
-					int idx = polyInput.addPoint(edgeEndPoint);
-					vecPointIndexes.push_back(idx);
-
-					edge = edge->next;
-					if (edge == face->edge)
-					{
-						if (kk != face->n_edges - 1)
-						{
-							std::cout << "kk != face->n_edges - 1" << std::endl;
-						}
-						break;
-					}
-				}
-				if (vecPointIndexes.size() < 3)
-				{
-#ifdef _DEBUG
-					std::cout << "face with < 3 edges" << std::endl;
-#endif
-					continue;
-				}
-
-				// TODO: fix polyline, detect overlapping edges
-
-				polyInput.m_poly_data->addFace(vecPointIndexes.begin(), vecPointIndexes.end());
-			}
-		}
-	}
-}
-
-void polyhedronFromMesh(const carve::mesh::Mesh<3>* mesh, PolyInputCache3D& polyInput)
-{
-	for (size_t jj = 0; jj < mesh->faces.size(); ++jj)
-	{
-		carve::mesh::Face<3>* face = mesh->faces[jj];
-		carve::mesh::Edge<3>* edge = face->edge;
-		if (edge)
-		{
-			std::vector<int> vecPointIndexes;
-			size_t maxNumEdges = 1000;
-			for (size_t kk = 0; kk < face->n_edges; ++kk)
-			{
-				vec3& edgeEndPoint = edge->v2()->v;
-				int idx = polyInput.addPoint(edgeEndPoint);
-				vecPointIndexes.push_back(idx);
-
-				edge = edge->next;
-				if (edge == face->edge)
-				{
-					break;
-				}
-			}
-			if (vecPointIndexes.size() < 3)
-			{
-#ifdef _DEBUG
-				std::cout << "face with < 3 edges" << std::endl;
-#endif
-				continue;
-			}
-			polyInput.m_poly_data->addFace(vecPointIndexes.begin(), vecPointIndexes.end());
-		}
-	}
-}
-
 bool ItemShapeData::addClosedPolyhedron(const shared_ptr<carve::input::PolyhedronData>& poly_data, const GeomProcessingParams& params, shared_ptr<GeometrySettings>& geom_settings)
 {
 	if (poly_data->getVertexCount() < 3)
@@ -178,7 +38,6 @@ bool ItemShapeData::addClosedPolyhedron(const shared_ptr<carve::input::Polyhedro
 	}
 
 	double eps = params.epsMergePoints;
-	double minFaceArea = params.minFaceArea;
 	std::map<std::string, std::string> mesh_input_options;
 	shared_ptr<carve::mesh::MeshSet<3> > meshsetUnchanged(poly_data->createMesh(mesh_input_options, eps));
 	std::string details;
@@ -202,20 +61,6 @@ bool ItemShapeData::addClosedPolyhedron(const shared_ptr<carve::input::Polyhedro
 		}
 	}
 
-#ifdef _DEBUG
-
-	MeshSetInfo info;
-	bool validMesh = MeshOps::checkMeshSetValidAndClosed(meshsetUnchanged, info, params);
-	MeshOps::checkAndFixMeshsetInverted(meshsetUnchanged, info, params);
-
-	//std::cout << "failed to correct polyhedron data\n";
-	if (params.debugDump)
-	{
-		GeomDebugDump::DumpSettingsStruct dumpColorSettings;
-		dumpWithLabel("addClosedPolyhedron::meshsetUnchanged", meshsetUnchanged, dumpColorSettings, params, true, false);
-	}
-#endif
-
 	if (meshsetUnchanged->isClosed())
 	{
 		m_meshsets.push_back(meshsetUnchanged);
@@ -231,6 +76,10 @@ bool ItemShapeData::addClosedPolyhedron(const shared_ptr<carve::input::Polyhedro
 	}
 #endif
 
+	MeshSetInfo info;
+	bool validMesh = MeshOps::checkMeshSetValidAndClosed(meshsetUnchanged, info, params);
+	MeshOps::checkAndFixMeshsetInverted(meshsetUnchanged, info, params);
+
 	if (poly_data->faceCount > 10000)
 	{
 		// TODO: buld spatial partition tree, and intersect all edges within a box with vertices and edges of that box
@@ -241,44 +90,71 @@ bool ItemShapeData::addClosedPolyhedron(const shared_ptr<carve::input::Polyhedro
 	// try to fix winding order
 	reverseFacesInPolyhedronData(poly_data);
 
-	meshsetUnchanged = shared_ptr<carve::mesh::MeshSet<3> >(poly_data->createMesh(mesh_input_options, eps));
-	if (meshsetUnchanged->isClosed())
+	shared_ptr<carve::mesh::MeshSet<3> > meshsetChanged(poly_data->createMesh(mesh_input_options, eps));
+	if (meshsetChanged->isClosed())
 	{
-		m_meshsets.push_back(meshsetUnchanged);
+		m_meshsets.push_back(meshsetChanged);
 		return true;
 	}
 
-	MeshOps::intersectOpenEdgesWithPoints(meshsetUnchanged, params);
+	MeshOps::intersectOpenEdgesWithPoints(meshsetChanged, params);
 
-	for (size_t i = 0; i < meshsetUnchanged->meshes.size(); ++i)
+	for (size_t i = 0; i < meshsetChanged->meshes.size(); ++i)
 	{
-		meshsetUnchanged->meshes[i]->recalc(eps);
+		meshsetChanged->meshes[i]->recalc(eps);
 	}
-	if (meshsetUnchanged->isClosed())
+	if (meshsetChanged->isClosed())
 	{
-		m_meshsets.push_back(meshsetUnchanged);
+		m_meshsets.push_back(meshsetChanged);
 		return true;
 	}
 
-	MeshOps::intersectOpenEdgesWithEdges(meshsetUnchanged, params);
+	MeshOps::intersectOpenEdgesWithEdges(meshsetChanged, params);
 
-	if (meshsetUnchanged->isClosed())
+	if (meshsetChanged->isClosed())
 	{
-		m_meshsets.push_back(meshsetUnchanged);
+		m_meshsets.push_back(meshsetChanged);
 		return true;
 	}
 
-	{
-		MeshOps::resolveOpenEdges(meshsetUnchanged, params);
+	MeshOps::resolveOpenEdges(meshsetChanged, params);
 
-		if (meshsetUnchanged->isClosed())
+	if (meshsetChanged->isClosed())
+	{
+		m_meshsets.push_back(meshsetChanged);
+		return true;
+	}
+
+	MeshSetInfo infoChanged;
+	bool validMeshChanged = MeshOps::checkMeshSetValidAndClosed(meshsetChanged, infoChanged, params);
+	if (MeshOps::isBetterForBoolOp(infoChanged, info, false))
+	{
+		m_meshsets_open.push_back(meshsetChanged);
+
+#ifdef _DEBUG
+		if (params.debugDump)
 		{
-			m_meshsets.push_back(meshsetUnchanged);
-			return true;
+			glm::vec4 color(0.3, 0.4, 0.5, 1.0);
+			GeomDebugDump::dumpMeshsetOpenEdges(meshsetChanged, color, false, false);
+			GeomDebugDump::dumpMeshset(meshsetChanged.get(), color, true, false);
 		}
-
-		m_meshsets_open.push_back(meshsetUnchanged); // still may be useful as open mesh
+#endif
 	}
+	else
+	{
+		// still may be useful as open mesh
+		m_meshsets_open.push_back(meshsetUnchanged);
+
+#ifdef _DEBUG
+		if (params.debugDump)
+		{
+			glm::vec4 color(0.3, 0.4, 0.5, 1.0);
+			GeomDebugDump::dumpMeshsetOpenEdges(meshsetUnchanged, color, false, false);
+			GeomDebugDump::dumpMeshset(meshsetUnchanged.get(), color, true, false);
+		}
+#endif
+	}
+
 	// Meshset is not closed
 	return false;
 }
@@ -320,7 +196,7 @@ void ItemShapeData::addOpenOrClosedPolyhedron(const shared_ptr<carve::input::Pol
 	{
 		m_meshsets_open.push_back(meshset);
 
-#ifdef _DEBUG
+#ifdef _DEBUG_GEOM
 		MeshSetInfo info;
 		MeshOps::checkMeshSetValidAndClosed(meshset, info, params);
 

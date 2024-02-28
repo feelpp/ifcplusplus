@@ -25,17 +25,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 class BuildingModel;
 class BuildingEntity;
 class GeometryConverter;
+class GeometrySettings;
 class CommandManager;
-class ViewerWidget;
-
-struct SelectedEntity 
-{
-	shared_ptr<BuildingEntity>	m_entity;
-	osg::ref_ptr<osg::Group>	m_osg_group;
-	osg::ref_ptr<osg::Material> m_material_previous;
-	osg::ref_ptr<osg::Material> m_material_selected;
-};
-std::string getGUID(const shared_ptr<BuildingEntity>& ent);
+class ViewController;
+struct SelectedEntity;
 
 class IfcPlusPlusSystem : public QObject, public osgGA::GUIEventHandler
 {
@@ -46,38 +39,30 @@ public:
 	~IfcPlusPlusSystem();
 
 	bool handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& aa);
-	shared_ptr<GeometryConverter>	getGeometryConverter()	{ return m_geometry_converter; }
 	shared_ptr<BuildingModel>&		getIfcModel()			{ return m_ifc_model; }
 	void setIfcModel( shared_ptr<BuildingModel>& model );
-	shared_ptr<CommandManager>		getCommandManager()		{ return m_command_manager; }
-	osg::Group*						getRootNode() { return m_rootnode; }
-	osg::Switch*					getModelNode() { return m_sw_model; }
-	osg::Switch*					getCoordinateAxesNode() { return m_sw_coord_axes; }
-	void setRootNode( osg::Group* root );
-	void setViewerWidget( ViewerWidget* widget );
-	void toggleSceneLight();
-	void switchCurveRepresentation( osg::Group* grp, bool on_off );
+	shared_ptr<GeometrySettings>&	getGeometrySettings() { return m_geom_settings; }
+	shared_ptr<GeometryConverter>&	getGeometryConverter() { return m_geometry_converter; }
+	shared_ptr<CommandManager>&		getCommandManager()		{ return m_command_manager; }
+	shared_ptr<ViewController>& getViewController() { return m_view_controller; }
+	void setCtrlKeyDown(bool ctrl_key_down);
+	bool isCtrlKeyDown() { return m_control_key_down; }
 	
 	void setObjectSelected( shared_ptr<BuildingEntity> object, bool selected, osg::Group* node = 0 );
-	void zoomToObject( shared_ptr<BuildingEntity> object, osg::Group* node = 0 );
 	const std::unordered_map<std::string, shared_ptr<SelectedEntity> >& getSelectedObjects() { return m_map_selected; }
 	void clearSelection();
 	void notifyModelCleared();
 	void notifyModelLoadingStart();
 	void notifyModelLoadingDone();
+	void notifyCursorCoordinates(double, double, double);
 
-	ViewerWidget*								m_viewer_widget;
+	shared_ptr<GeometrySettings>				m_geom_settings;
 	shared_ptr<GeometryConverter>				m_geometry_converter;
 	shared_ptr<CommandManager>					m_command_manager;
+	shared_ptr<ViewController>					m_view_controller;
 	std::unordered_map<std::string, shared_ptr<SelectedEntity> >	m_map_selected;
 	shared_ptr<BuildingModel>					m_ifc_model;
-	osg::ref_ptr<osg::Group>					m_rootnode;
-	osg::ref_ptr<osg::Switch>					m_sw_coord_axes;
-	osg::ref_ptr<osg::Switch>					m_sw_model;
-	osg::ref_ptr<osg::MatrixTransform>			m_transform_light;
-	osg::ref_ptr<osg::Material>					m_material_selected;
-	bool										m_light_on;
-	bool										m_show_curve_representation;
+	bool										m_control_key_down = false;
 
 signals:
 	void signalObjectsSelected( std::unordered_map<std::string, shared_ptr<BuildingEntity> >& map_objects );
@@ -85,4 +70,5 @@ signals:
 	void signalModelCleared();
 	void signalModelLoadingStart();
 	void signalModelLoadingDone();
+	void signalCursorCoordinates(double, double, double);
 };

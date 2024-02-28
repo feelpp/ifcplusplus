@@ -66,11 +66,13 @@ public:
 	shared_ptr<CurveConverter>			m_curve_converter;
 	shared_ptr<FaceConverter>			m_face_converter;
 	shared_ptr<ProfileCache>			m_profile_cache;
+	shared_ptr<StylesConverter>			m_styles_converter;
 	shared_ptr<Sweeper>					m_sweeper;
 
 	SolidModelConverter( shared_ptr<GeometrySettings>& gs, shared_ptr<PointConverter>&	pc, shared_ptr<CurveConverter>& cc, 
-		shared_ptr<FaceConverter>& fc, shared_ptr<ProfileCache>& pcache, shared_ptr<Sweeper>& sw )
-		: m_geom_settings( gs ), m_point_converter( pc ), m_curve_converter( cc ), m_face_converter( fc ), m_profile_cache( pcache ), m_sweeper( sw )
+		shared_ptr<FaceConverter>& fc, shared_ptr<ProfileCache>& pcache, shared_ptr<Sweeper>& sw, shared_ptr<StylesConverter>& styles_converter )
+		: m_geom_settings( gs ), m_point_converter( pc ), m_curve_converter( cc ), m_face_converter( fc ), m_profile_cache( pcache ),
+		m_sweeper( sw ), m_styles_converter(styles_converter)
 	{
 	}
 
@@ -863,6 +865,9 @@ public:
 		// now copy processed first operands to result input data
 		std::copy( first_operand_data->m_meshsets.begin(), first_operand_data->m_meshsets.end(), std::back_inserter( item_data->m_meshsets ) );
 
+		// copy also styles from operands, if any
+		std::copy(first_operand_data->m_vec_styles.begin(), first_operand_data->m_vec_styles.end(), std::back_inserter(item_data->m_vec_styles));
+
 		shared_ptr<IfcBooleanClippingResult> boolean_clipping_result = dynamic_pointer_cast<IfcBooleanClippingResult>( bool_result );
 		if( boolean_clipping_result )
 		{
@@ -1336,7 +1341,7 @@ public:
 			std::vector<vec2> segment_start_points_2d;
 			shared_ptr<IfcBoundedCurve> bounded_curve = polygonal_half_space->m_PolygonalBoundary;
 			m_curve_converter->convertIfcCurve2D( bounded_curve, polygonal_boundary, segment_start_points_2d, true );
-			ProfileConverter::deleteLastPointIfEqualToFirst( polygonal_boundary );
+			GeomUtils::unClosePolygon( polygonal_boundary, m_geom_settings->getEpsilonMergePoints());
 			ProfileConverter::simplifyPath( polygonal_boundary, m_geom_settings->getEpsilonMergePoints(), m_geom_settings->getEpsilonCoplanarAngle() );
 
 			vec3 solid_extrusion_direction = boundary_plane_normal;
@@ -1739,6 +1744,20 @@ public:
 
 	void convertIfcBooleanOperand( const shared_ptr<IfcBooleanOperand>& operand_select, shared_ptr<ItemShapeData>& item_data, const shared_ptr<ItemShapeData>& other_operand )
 	{
+		if (m_geom_settings->handleStyledItems())
+		{
+			shared_ptr<IfcRepresentationItem> representationItem = dynamic_pointer_cast<IfcRepresentationItem>(operand_select);
+			if (representationItem)
+			{
+				std::vector<shared_ptr<StyleData> > vec_style_data;
+				m_styles_converter->convertRepresentationStyle(representationItem, vec_style_data);
+				for (auto& style : vec_style_data)
+				{
+					item_data->addStyle(style);
+				}
+			}
+		}
+
 		// TYPE IfcBooleanOperand = SELECT	(IfcBooleanResult	,IfcCsgPrimitive3D	,IfcHalfSpaceSolid	,IfcSolidModel	,IfcTessellatedFaceSet);
 		shared_ptr<IfcSolidModel> solid_model = dynamic_pointer_cast<IfcSolidModel>( operand_select );
 		if( solid_model )

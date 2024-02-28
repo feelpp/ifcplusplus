@@ -95,7 +95,7 @@
   </PropertyGroup>
   <PropertyGroup Label="QtSettings" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <QtInstall>$(DefaultQtVersion)</QtInstall>
-    <QtModules>core;xml;opengl;network;gui;widgets;printsupport</QtModules>
+    <QtModules>core;opengl;openglwidgets;gui;widgets</QtModules>
   </PropertyGroup>
   <PropertyGroup Label="QtSettings" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <QtInstall>5.7.1</QtInstall>
@@ -103,7 +103,7 @@
   </PropertyGroup>
   <PropertyGroup Label="QtSettings" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <QtInstall>$(DefaultQtVersion)</QtInstall>
-    <QtModules>core;xml;opengl;network;gui;widgets;printsupport</QtModules>
+    <QtModules>core;opengl;gui;widgets;openglwidgets</QtModules>
   </PropertyGroup>
   <PropertyGroup Label="QtSettings" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <QtInstall>5.7.1</QtInstall>
@@ -161,7 +161,7 @@
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <EnableParallelCodeGeneration>true</EnableParallelCodeGeneration>
-      <DisableSpecificWarnings>4189;4505</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4189;4505;4005</DisableSpecificWarnings>
       <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -252,10 +252,10 @@
       <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <DisableSpecificWarnings>4305</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4305;4005</DisableSpecificWarnings>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <OutputFile>$(OutDir)\$(ProjectName).exe</OutputFile>
       <AdditionalLibraryDirectories>..\..\IfcPlusPlus\bin;$(OSG_DIR)\lib;$(OSG_DIR)\build\lib;$(FREETYPE_DIR)\objs\vc2010\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -294,12 +294,15 @@
     <ClCompile Include="src\gui\IfcTreeWidget.cpp" />
     <ClCompile Include="src\gui\MainWindow.cpp" />
     <ClCompile Include="src\gui\StoreyShiftWidget.cpp" />
-    <ClCompile Include="src\gui\TabReadWrite.cpp" />
-    <ClCompile Include="src\gui\TabView.cpp" />
+    <ClCompile Include="src\gui\OpenFileWidget.cpp" />
+    <ClCompile Include="src\gui\SettingsWidget.cpp" />
     <ClCompile Include="src\IfcPlusPlusSystem.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\viewer\GraphicsWindowQt.cpp" />
-    <ClCompile Include="src\viewer\OrbitCameraManipulator.cpp" />
+    <ClCompile Include="src\viewer\IntersectionHandler.cpp" />
+    <ClCompile Include="src\viewer\Orbit3DManipulator.cpp" />
+    <ClCompile Include="src\viewer\ViewController.cpp" />
+    <ClCompile Include="src\viewer\ViewerUtil.cpp" />
     <ClCompile Include="src\viewer\ViewerWidget.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -356,17 +359,19 @@
     <ClInclude Include="src\cmd\CmdRemoveSelectedObjects.h" />
     <ClInclude Include="src\cmd\Command.h" />
     <ClInclude Include="src\cmd\CommandManager.h" />
+    <ClInclude Include="src\viewer\ViewController.h" />
+    <ClInclude Include="src\viewer\ViewerUtil.h" />
     <QtMoc Include="src\viewer\ViewerWidget.h">
     </QtMoc>
     <QtMoc Include="src\IfcPlusPlusSystem.h">
     </QtMoc>
-    <QtMoc Include="src\gui\TabView.h">
+    <QtMoc Include="src\gui\SettingsWidget.h">
     </QtMoc>
     <QtMoc Include="src\gui\IfcTreeWidget.h">
     </QtMoc>
     <QtMoc Include="src\gui\MainWindow.h">
     </QtMoc>
-    <QtMoc Include="src\gui\TabReadWrite.h">
+    <QtMoc Include="src\gui\OpenFileWidget.h">
     </QtMoc>
     <QtMoc Include="src\gui\StoreyShiftWidget.h">
     </QtMoc>
@@ -374,7 +379,8 @@
     <ClInclude Include="src\gui\ScopedLockAndBlock.h" />
     <ClInclude Include="src\IncludeGeometryHeaders.h" />
     <ClInclude Include="src\viewer\GraphicsWindowQt.h" />
-    <ClInclude Include="src\viewer\OrbitCameraManipulator.h" />
+    <ClInclude Include="src\viewer\IntersectionHandler.h" />
+    <QtMoc Include="src\viewer\Orbit3DManipulator.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\appicon.rc" />

@@ -38,6 +38,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 
 typedef std::array<double, 2> array2d;
 
+namespace GeomDebugDump
+{
+	void dumpPolyline(const std::vector<vec2>& vec_polyline, const glm::vec4& color, double lineThickness, bool move_dump_position, bool depthTestOff);
+}
+
 namespace GeomUtils
 {
 	inline double length2(const carve::geom::vector<3>& p0, const carve::geom::vector<3>& p1)
@@ -48,6 +53,26 @@ namespace GeomUtils
 		return dx * dx + dy * dy + dz * dz;
 	}
 
+	inline void safeNormalize(carve::geom::vector<2>& vec, double eps)
+	{
+		double len = vec.length2();
+		if (len > eps * eps)
+		{
+			vec.normalize();
+		}
+	}
+	inline void safeNormalize(std::array<double, 2>& vec, double eps)
+	{
+		double len2 = vec[0] * vec[0] + vec[1] * vec[1];
+
+		if (len2 > eps * eps)
+		{
+			double len = sqrt(len2);
+			vec[0] /= len;
+			vec[1] /= len;
+		}
+	}
+	
 	inline void safeNormalize(carve::geom::vector<3>& vec, double eps)
 	{
 		double len = vec.length2();
@@ -105,6 +130,7 @@ namespace GeomUtils
 		const glm::dvec3& getPosition() const { return m_position; }
 		const glm::dvec3& getNormal() const { return m_normal; }
 		const void setNormal(glm::dvec3& norm) { m_normal = norm; }
+		const void setPosition(glm::dvec3& pos) { m_position = pos; }
 
 		void setPlane(const glm::dvec3& _position, const glm::dvec3& _normal)
 		{
@@ -232,6 +258,7 @@ namespace GeomUtils
 		polygon_centroid /= (double)(polygon.size());
 		return polygon_centroid;
 	}
+
 	inline vec2 computePolygonCentroid(const std::vector<vec2>& polygon)
 	{
 		vec2 polygon_centroid(carve::geom::VECTOR(0, 0));
@@ -790,11 +817,21 @@ namespace GeomUtils
 			carve::geom::vector<3> side2 = v3 - v2;
 			carve::geom::vector<3> c = cross(side1, side2);
 			double len_square = c.length2();
-			if (len_square > eps * eps)
+			if (len_square > 1.e-50)  // #define DBL_MIN          2.2250738585072014e-308 // min positive value
 			{
 				double area = sqrt(len_square) * 0.5;
-				return std::abs(area);
+				return area;
 			}
+#if defined(_DEBUG) || defined(_DEBUG_RELEASE)
+			else
+			{
+				if (len_square > 1.e-150)
+				{
+					double area = sqrt(len_square) * 0.5;
+					std::cout << "computePolygonArea: check division by " << len_square << std::endl;
+				}
+			}
+#endif
 		}
 		else
 		{
@@ -819,21 +856,20 @@ namespace GeomUtils
 				s += c;
 			}
 
-			double length = normal.length();// glm::length(normal);
-			if (std::abs(length) < eps)
+			double len_square = normal.length2();// glm::length(normal);
+			if (len_square < 1.e-50)
 			{
-				return false;
+				return 0.0;
 			}
 
-			normal /= length;
-			double area = 0.5 * length;
+			double area = sqrt(len_square) * 0.5;
 			return std::abs(area);
 		}
 
 		return 0.0;
 	}
 
-	inline bool checkOpenPolygonConvexity(const std::vector<vec2>& polygon)
+	inline bool checkOpenPolygonConvexity(const std::vector<vec2>& polygon, double eps)
 	{
 		if (polygon.size() < 3)
 		{
@@ -857,9 +893,9 @@ namespace GeomUtils
 
 			if (k > 0)
 			{
-				if (std::abs(zcrossproduct) > 0.0001)
+				if (std::abs(zcrossproduct) > eps)
 				{
-					if (std::abs(zcrossproduct_previous) > 0.0001)
+					if (std::abs(zcrossproduct_previous) > eps)
 					{
 						if (zcrossproduct * zcrossproduct_previous < 0)
 						{
@@ -874,16 +910,16 @@ namespace GeomUtils
 		return true;
 	}
 
-	inline void appendPointsToCurve(const std::vector<vec2>& points_vec, std::vector<vec3>& target_vec)
+	inline void appendPointsToCurve(const std::vector<vec2>& points_vec, std::vector<vec3>& target_vec, double eps)
 	{
 		bool omit_first = false;
 		if (target_vec.size() > 0)
 		{
 			const vec3& last_point = target_vec.back();
 			const vec2& first_point_current_segment = points_vec.front();
-			if (std::abs(last_point.x - first_point_current_segment.x) < 0.000001)
+			if (std::abs(last_point.x - first_point_current_segment.x) < eps)
 			{
-				if (std::abs(last_point.y - first_point_current_segment.y) < 0.000001)
+				if (std::abs(last_point.y - first_point_current_segment.y) < eps)
 				{
 					omit_first = true;
 				}
@@ -995,6 +1031,7 @@ namespace GeomUtils
 		}
 		// TODO: handle all segments separately: std::vector<std::vector<vec3> >& target_vec
 	}
+
 	inline void addArcWithEndPoint(std::vector<vec2>& coords, double radius, double start_angle, double opening_angle, double x_center, double y_center, int num_segments)
 	{
 		if (num_segments < 3)
@@ -1016,7 +1053,29 @@ namespace GeomUtils
 		}
 	}
 
-	inline bool LineToLineIntersectionHelper(vec2& v1, vec2& v2, vec2& v3, vec2& v4, double& r, double& s)
+	inline void getCirclePoints(double circle_radius, double circle_radius2, double startAngle, double openingAngle, int num_segments, const carve::math::Matrix& matrix,
+		std::vector<vec3>& circle_segment_points3D)
+	{
+		double angle = startAngle;
+		double angle_delta = openingAngle / (double)(num_segments - 1);
+
+		for (int i = 0; i < num_segments; ++i)
+		{
+			vec3 circlePoint = carve::geom::VECTOR(circle_radius * cos(angle), circle_radius * sin(angle), 0);
+			if (circle_radius2 > 0)
+			{
+				circlePoint = carve::geom::VECTOR(circle_radius * cos(angle), circle_radius2 * sin(angle), 0);
+			}
+
+			// apply position
+			circlePoint = matrix * circlePoint;
+
+			circle_segment_points3D.push_back(circlePoint);
+			angle += angle_delta;
+		}
+	}
+
+	inline bool LineToLineIntersectionHelper(const vec2& v1, const vec2& v2, const vec2& v3, const vec2& v4, double& r, double& s, double eps)
 	{
 		// check if lines are parallel
 		const vec2 vertex1to2 = v2 - v1;
@@ -1024,7 +1083,7 @@ namespace GeomUtils
 		if (vertex1to2.y / vertex1to2.x != vertex3to4.y / vertex3to4.x)
 		{
 			const double d = vertex1to2.x * vertex3to4.y - vertex1to2.y * vertex3to4.x;
-			if (d != 0)
+			if (std::abs(d) > eps )
 			{
 				const vec2 vertex3to1 = v1 - v3;
 				r = (vertex3to1.y * vertex3to4.x - vertex3to1.x * vertex3to4.y) / d;
@@ -1055,12 +1114,12 @@ namespace GeomUtils
 
 	}
 
-	inline bool LineSegmentToLineIntersection(vec2& v1, vec2& v2, vec2& v3, vec2& v4, std::vector<vec2>& result)
+	inline bool LineSegmentToLineIntersection(const vec2& v1, const vec2& v2, const vec2& v3, const vec2& v4, double eps, std::vector<vec2>& result)
 	{
 		double r, s;
-		if (LineToLineIntersectionHelper(v1, v2, v3, v4, r, s))
+		if (LineToLineIntersectionHelper(v1, v2, v3, v4, r, s, eps))
 		{
-			if (r >= 0 && r <= 1)
+			if (r > eps && r < 1.0 - eps )
 			{
 				result.push_back(v1 + (v2 - v1) * r);
 				return true;
@@ -1068,7 +1127,25 @@ namespace GeomUtils
 		}
 		return false;
 	}
-	inline bool LineSegmentToLineSegmentIntersection(vec2& v1, vec2& v2, vec2& v3, vec2& v4, std::vector<vec2>& result)
+
+	inline bool LineSegmentToLineSegmentIntersection(const vec2& v1, const vec2& v2, const vec2& v3, const vec2& v4, const double eps, std::vector<vec2>& result)
+	{
+		double r, s;
+		if (LineToLineIntersectionHelper(v1, v2, v3, v4, r, s, eps))
+		{
+			if (r > eps && r < 1.0 - eps)
+			{
+				if (s > eps && s < 1.0 - eps)
+				{
+					result.push_back(v1 + (v2 - v1) * r);
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	inline bool LineSegmentToLineSegmentIntersection(vec3& v1, vec3& v2, vec3& v3, vec3& v4, std::vector<vec3>& result)
 	{
 		double r, s;
 		if (LineToLineIntersectionHelper(v1, v2, v3, v4, r, s))
@@ -1084,16 +1161,35 @@ namespace GeomUtils
 		}
 		return false;
 	}
-	inline bool LineSegmentToLineSegmentIntersection(vec3& v1, vec3& v2, vec3& v3, vec3& v4, std::vector<vec3>& result)
+
+	inline bool isPolygonSelfIntersecting(const std::vector<vec2>& polygon, double eps)
 	{
-		double r, s;
-		if (LineToLineIntersectionHelper(v1, v2, v3, v4, r, s))
+		size_t numPoints = polygon.size();
+		if (numPoints < 4)
 		{
-			if (r >= 0 && r <= 1)
+			return false;
+		}
+		for (int ii = 0; ii < numPoints; ++ii)
+		{
+			const vec2& p1 = polygon[ii];
+			const vec2& p2 = polygon[(ii + 1)%numPoints];
+			for (int jj = 0; jj < numPoints; ++jj)
 			{
-				if (s >= 0 && s <= 1)
+				if (ii == jj) { continue; }
+				const vec2& p1a = polygon[jj];
+				const vec2& p2a = polygon[(jj + 1) % numPoints];
+
+				std::vector<vec2> result;
+				bool intersects = LineSegmentToLineSegmentIntersection(p1, p2, p1a, p2a, eps, result);
+				if (intersects)
 				{
-					result.push_back(v1 + (v2 - v1) * r);
+#ifdef _DEBUG
+					glm::vec4 color(0.4, 0.6, 0.9, 1.0);
+					std::vector<vec2> segment1 = { p1, p2 };
+					GeomDebugDump::dumpPolyline(segment1, color, 2.0, false, false);
+					std::vector<vec2> segment2 = { p1a, p2a };
+					GeomDebugDump::dumpPolyline(segment2, color, 2.0, false, false);
+#endif
 					return true;
 				}
 			}
@@ -1112,6 +1208,7 @@ namespace GeomUtils
 		const double lambda = denom / numer;
 		closest = carve::geom::VECTOR(line_origin.x + lambda * line_direction.x, line_origin.y + lambda * line_direction.y, line_origin.z + lambda * line_direction.z);
 	}
+
 	inline void closestPointOnLine(const vec2& point, const vec2& line_origin, const vec2& line_direction, vec2& closest)
 	{
 		const double denom = point.x * line_direction.x + point.y * line_direction.y + -line_direction.x * line_origin.x - line_direction.y * line_origin.y;
@@ -1123,16 +1220,19 @@ namespace GeomUtils
 		const double lambda = denom / numer;
 		closest = carve::geom::VECTOR(line_origin.x + lambda * line_direction.x, line_origin.y + lambda * line_direction.y);
 	}
+
 	inline double distancePoint2Line(const vec3& point, const vec3& line_p0, const vec3& line_p1)
 	{
 		// d = |(point - line_p0)x(point - line_p1)| / |line_p1 - line_p0|
 		return carve::geom::cross((point - line_p0), (point - line_p1)).length() / (line_p1 - line_p0).length();
 	}
+
 	inline double distancePoint2LineUnitDirection(const vec3& point, const vec3& line_pt, const vec3& line_direction_normalized)
 	{
 		// d = |line_direction_normalized x ( point - line_pt )|
 		return carve::geom::cross((point - line_pt), (line_direction_normalized)).length();
 	}
+
 	template<unsigned int ndim>
 	double Point2LineSegmentDistance2(const carve::geom::linesegment<ndim>& l, const carve::geom::vector<ndim>& v, carve::geom::vector<ndim>& closest_point)
 	{
@@ -1266,7 +1366,7 @@ namespace GeomUtils
 			xaxis.z, yaxis.z, zaxis.z, 0,
 			0, 0, 0, 1);
 	}
-	inline bool bisectingPlane(const vec3& v1, const vec3& v2, const vec3& v3, vec3& normal, double CARVE_EPSILON)
+	inline bool bisectingPlane(const vec3& v1, const vec3& v2, const vec3& v3, vec3& normal, double eps)
 	{
 		bool valid = false;
 		vec3 v21 = v2 - v1;
@@ -1274,7 +1374,7 @@ namespace GeomUtils
 		double len21_square = v21.length2();
 		double len32_square = v32.length2();
 
-		if (len21_square <= CARVE_EPSILON * len32_square)
+		if (len21_square <= eps * len32_square)
 		{
 			if (len32_square == 0.0)
 			{
@@ -1295,7 +1395,7 @@ namespace GeomUtils
 		else
 		{
 			valid = true;
-			if (len32_square <= CARVE_EPSILON * len21_square)
+			if (len32_square <= eps * len21_square)
 			{
 				// return v21 as bisector
 				v21.normalize();
@@ -1309,7 +1409,7 @@ namespace GeomUtils
 				double dot_product = dot(v32, v21);
 				double dot_product_abs = std::abs(dot_product);
 
-				if (dot_product_abs > (1.0 + CARVE_EPSILON) || dot_product_abs < (1.0 - CARVE_EPSILON))
+				if (dot_product_abs > (1.0 + eps) || dot_product_abs < (1.0 - eps))
 				{
 					normal = (v32 + v21) * dot_product - v32 - v21;
 					normal.normalize();
@@ -1353,19 +1453,19 @@ namespace GeomUtils
 			point = matrix * point;
 		}
 	}
-	inline void applyTranslate(shared_ptr<carve::mesh::MeshSet<3> >& meshset, const vec3& pos, double CARVE_EPSILON)
+	inline void applyTranslate(shared_ptr<carve::mesh::MeshSet<3> >& meshset, const vec3& pos, double eps)
 	{
 		for (size_t i = 0; i < meshset->vertex_storage.size(); ++i)
 		{
 			vec3& point = meshset->vertex_storage[i].v;
 			point = point + pos;
 		}
-		for (size_t i = 0; i < meshset->meshes.size(); ++i)
-		{
-			meshset->meshes[i]->recalc(CARVE_EPSILON);
-		}
+		//for (size_t i = 0; i < meshset->meshes.size(); ++i)
+		//{
+		//	meshset->meshes[i]->recalc(eps);
+		//}
 	}
-	inline void applyTransform(shared_ptr<carve::mesh::MeshSet<3> >& meshset, const carve::math::Matrix& matrix, double CARVE_EPSILON)
+	inline void applyTransform(shared_ptr<carve::mesh::MeshSet<3> >& meshset, const carve::math::Matrix& matrix, double eps)
 	{
 		for (size_t i = 0; i < meshset->vertex_storage.size(); ++i)
 		{
@@ -1374,7 +1474,7 @@ namespace GeomUtils
 		}
 		for (size_t i = 0; i < meshset->meshes.size(); ++i)
 		{
-			meshset->meshes[i]->recalc(CARVE_EPSILON);
+			meshset->meshes[i]->recalc(eps);
 		}
 	}
 	inline void applyTransform(carve::geom::aabb<3>& aabb, const carve::math::Matrix& matrix)
@@ -1425,8 +1525,8 @@ namespace GeomUtils
 		}
 
 		return true;
-
 	}
+
 	inline bool checkMatricesIdentical(const carve::math::Matrix& A, const carve::math::Matrix& B, double tolerance = 0.000001)
 	{
 		for (size_t i = 0; i < 16; ++i)
@@ -1436,6 +1536,7 @@ namespace GeomUtils
 		}
 		return true;
 	}
+
 	static void simplifyPolygon(std::vector<std::array<double, 2> >& polygon, bool mergeAlignedEdges, double epsMergePoints, double epsAlignedEdgesAngle)
 	{
 		if (polygon.size() > 2)
@@ -1443,38 +1544,50 @@ namespace GeomUtils
 			for (size_t iiRound = 0; iiRound < polygon.size(); ++iiRound)
 			{
 				bool removedPoint = false;
-				for (size_t ii = 2; ii < polygon.size(); ++ii)
+				for (size_t ii = 1; ii <= polygon.size(); ++ii)
 				{
-					const std::array<double, 2>& p0 = polygon[ii - 2];
-					const std::array<double, 2>& p1 = polygon[ii - 1];
-					const std::array<double, 2>& p2 = polygon[ii - 0];
+					size_t idx0 = ii - 1;
+					size_t idx1 = ii % polygon.size();
+					size_t idx2 = (ii + 1) % polygon.size();
+					const std::array<double, 2>& p0 = polygon[idx0];
+					const std::array<double, 2>& p1 = polygon[idx1];
+					const std::array<double, 2>& p2 = polygon[idx2];
 
-					// TODO: check if we need to normalize
-					const double dx1 = p1[0] - p0[0];
-					const double dx2 = p2[0] - p1[0];
-					const double dy1 = p1[1] - p0[1];
-					const double dy2 = p2[1] - p1[1];
+					double dx1 = p1[0] - p0[0];
+					double dx2 = p2[0] - p1[0];
+					double dy1 = p1[1] - p0[1];
+					double dy2 = p2[1] - p1[1];
 
 					if (std::abs(dx1) < epsMergePoints && std::abs(dy1) < epsMergePoints)
 					{
-						polygon.erase(polygon.begin() + ii - 1);
+						polygon.erase(polygon.begin() + idx1);
 						removedPoint = true;
 						break;
 					}
 					if (std::abs(dx2) < epsMergePoints && std::abs(dy2) < epsMergePoints)
 					{
-						polygon.erase(polygon.begin() + ii - 1);
+						polygon.erase(polygon.begin() + idx1);
 						removedPoint = true;
 						break;
 					}
 
 					if (mergeAlignedEdges)
 					{
+						std::array<double, 2> p1p0 = { p1[0] - p0[0], p1[1] - p0[1] };
+						std::array<double, 2> p1p2 = { p1[0] - p2[0], p1[1] - p2[1] };
+						safeNormalize(p1p0, epsMergePoints);
+						safeNormalize(p1p2, epsMergePoints);
+						dx1 = p1p0[0];
+						dx2 = p1p2[0];
+						dy1 = p1p0[1];
+						dy2 = p1p2[1];
+
 						double scalar = dx1 * dx2 + dy1 * dy2;
-						double checkAlignment = scalar * scalar - (dx1 * dx1 + dy1 * dy1) * (dx2 * dx2 + dy2 * dy2);
-						if (std::abs(checkAlignment) < epsAlignedEdgesAngle)
+						double check = scalar * scalar - (dx1 * dx1 + dy1 * dy1) * (dx2 * dx2 + dy2 * dy2);
+
+						if (std::abs(check) < epsAlignedEdgesAngle)
 						{
-							polygon.erase(polygon.begin() + ii - 1);
+							polygon.erase(polygon.begin() + idx1);
 							removedPoint = true;
 							break;
 						}
@@ -1496,37 +1609,50 @@ namespace GeomUtils
 			for (size_t iiRound = 0; iiRound < polygon.size(); ++iiRound)
 			{
 				bool removedPoint = false;
-				for (size_t ii = 2; ii < polygon.size(); ++ii)
+				for (size_t ii = 1; ii <= polygon.size(); ++ii)
 				{
-					const vec2& p0 = polygon[ii - 2];
-					const vec2& p1 = polygon[ii - 1];
-					const vec2& p2 = polygon[ii - 0];
-					vec2 p10 = p1 - p0;
-					vec2 p12 = p1 - p2;
+					size_t idx0 = ii - 1;
+					size_t idx1 = ii % polygon.size();
+					size_t idx2 = (ii + 1) % polygon.size();
+					const vec2& p0 = polygon[idx0];
+					const vec2& p1 = polygon[idx1];
+					const vec2& p2 = polygon[idx2];
 
-					if (std::abs(p10.x) < epsMergePoints && std::abs(p10.y) < epsMergePoints)
+					double dx1 = p1[0] - p0[0];
+					double dx2 = p2[0] - p1[0];
+					double dy1 = p1[1] - p0[1];
+					double dy2 = p2[1] - p1[1];
+
+					if (std::abs(dx1) < epsMergePoints && std::abs(dy1) < epsMergePoints)
 					{
-						polygon.erase(polygon.begin() + ii - 1);
+						polygon.erase(polygon.begin() + idx1);
 						removedPoint = true;
 						break;
 					}
-					if (std::abs(p12.x) < epsMergePoints && std::abs(p12.y) < epsMergePoints)
+					if (std::abs(dx2) < epsMergePoints && std::abs(dy2) < epsMergePoints)
 					{
-						polygon.erase(polygon.begin() + ii - 1);
+						polygon.erase(polygon.begin() + idx1);
 						removedPoint = true;
 						break;
 					}
 
 					if (mergeAlignedEdges)
 					{
-						p10.normalize();
-						p12.normalize();
-						double dotProduct = dot(p10, p12);
-						double angle = std::acos(dotProduct);
+						vec2 p1p0 = p1 - p0;
+						vec2 p1p2 = p1 - p2;
+						safeNormalize(p1p0, epsMergePoints);
+						safeNormalize(p1p2, epsMergePoints);
+						dx1 = p1p0.x;
+						dx2 = p1p2.x;
+						dy1 = p1p0.y;
+						dy2 = p1p2.y;
+	
+						double scalar = dx1 * dx2 + dy1 * dy2;
+						double check = scalar * scalar - (dx1 * dx1 + dy1 * dy1) * (dx2 * dx2 + dy2 * dy2);
 
-						if (std::abs(angle) < epsAlignedEdgesAngle)
+						if (std::abs(check) < epsAlignedEdgesAngle)
 						{
-							polygon.erase(polygon.begin() + ii - 1);
+							polygon.erase(polygon.begin() + idx1);
 							removedPoint = true;
 							break;
 						}
@@ -1540,7 +1666,7 @@ namespace GeomUtils
 			}
 		}
 	}
-
+	
 	static void simplifyPolygon(std::vector<vec3>& polygon, double epsMergePoints, double epsAlignedEdgesAngle)
 	{
 		if (polygon.size() > 2)
@@ -1548,11 +1674,14 @@ namespace GeomUtils
 			for (size_t iiRound = 0; iiRound < polygon.size(); ++iiRound)
 			{
 				bool removedPoint = false;
-				for (size_t ii = 2; ii < polygon.size(); ++ii)
+				for (size_t ii = 1; ii <= polygon.size(); ++ii)
 				{
-					const vec3& p0 = polygon[ii - 2];
-					const vec3& p1 = polygon[ii - 1];
-					const vec3& p2 = polygon[ii - 0];
+					size_t idx0 = ii - 1;
+					size_t idx1 = ii % polygon.size();
+					size_t idx2 = (ii + 1) % polygon.size();
+					const vec3& p0 = polygon[idx0];
+					const vec3& p1 = polygon[idx1];
+					const vec3& p2 = polygon[idx2];
 					double dx1 = p1.x - p0.x;
 					double dx2 = p2.x - p1.x;
 					double dy1 = p1.y - p0.y;
@@ -1562,14 +1691,14 @@ namespace GeomUtils
 
 					if (std::abs(dx1) < epsMergePoints && std::abs(dy1) < epsMergePoints && std::abs(dz1) < epsMergePoints)
 					{
-						polygon.erase(polygon.begin() + ii - 1);
+						polygon.erase(polygon.begin() + idx1);
 						removedPoint = true;
 						break;
 					}
 
 					if (std::abs(dx2) < epsMergePoints && std::abs(dy2) < epsMergePoints && std::abs(dz2) < epsMergePoints)
 					{
-						polygon.erase(polygon.begin() + ii - 1);
+						polygon.erase(polygon.begin() + idx1);
 						removedPoint = true;
 						break;
 					}
@@ -1592,7 +1721,7 @@ namespace GeomUtils
 
 						if (std::abs(check) < epsAlignedEdgesAngle)
 						{
-							polygon.erase(polygon.begin() + ii - 1);
+							polygon.erase(polygon.begin() + idx1);
 							removedPoint = true;
 							break;
 						}
@@ -1838,7 +1967,7 @@ namespace GeomUtils
 		}
 	}
 
-	inline std::pair<vec3, vec3> shortestConnectionSegmentToSegment(const vec3 A, const vec3 B, const vec3 C, const vec3 D, double CARVE_EPSILON)
+	inline std::pair<vec3, vec3> shortestConnectionSegmentToSegment(const vec3 A, const vec3 B, const vec3 C, const vec3 D, double eps)
 	{
 		vec3 u = B - A;
 		vec3 v = D - C;
@@ -1851,7 +1980,7 @@ namespace GeomUtils
 		double    e = dot(v, w);
 		double    sc, sN, sD = a * c - b * b;  // sc = sN / sD, sD >= 0
 		double    tc, tN, tD = a * c - b * b;  // tc = tN / tD, tD >= 0
-		double    tol = CARVE_EPSILON;
+		double    tol = eps;
 
 		// compute the line parameters of the two closest points
 		if (sD < tol)
@@ -1929,57 +2058,65 @@ namespace GeomUtils
 		return { P1, P2 };   // return the closest distance
 	}
 
-
-	inline bool pointInPolySimple(const std::vector<vec2>& points, const vec2& p, double CARVE_EPSILON)
+	inline bool pointInPolySimple(const std::vector<vec2>& polygon, const vec2& testPoint, double eps)
 	{
-		if (points.size() < 1)
+		if (polygon.size() < 3)
 		{
 			return false;
 		}
-		size_t l = points.size();
-		double s = 0.0;
-		double rp, r0, d;
 
-		rp = r0 = ::atan2(points[0].y - p.y, points[0].x - p.x);
+		int numIntersections = 0;
+		int numVertices = polygon.size();
 
-		for (size_t i = 1; i < l; i++)
+		for (int i = 0; i < numVertices; ++i)
 		{
-			double r = atan2(points[i].y - p.y, points[i].x - p.x);
-			d = r - rp;
-			if (d > M_PI)
+			int nextIndex = (i + 1) % numVertices;
+
+			// Check if the ray from the test point intersects with the edge
+			if ((polygon[i].y > testPoint.y) != (polygon[nextIndex].y > testPoint.y) &&
+				(testPoint.x < (polygon[nextIndex].x - polygon[i].x) * (testPoint.y - polygon[i].y) / (polygon[nextIndex].y - polygon[i].y) + polygon[i].x))
 			{
-				d -= M_TWOPI;
+				++numIntersections;
 			}
-			if (d < -M_PI)
-			{
-				d += M_TWOPI;
-			}
-			s = s + d;
-			rp = r;
 		}
 
-		d = r0 - rp;
-		if (d > M_PI)
-		{
-			d -= M_TWOPI;
-		}
-		if (d < -M_PI)
-		{
-			d += M_TWOPI;
-		}
-		s = s + d;
-
-		bool is_zero = fabs(s) < CARVE_EPSILON;
-		return !is_zero;
+		return numIntersections % 2 == 1;
 	}
 
-	inline bool isEnclosed(const std::vector<vec2>& loop1, const std::vector<vec2>& loop2, double CARVE_EPSILON)
+	enum PointPosition {
+		INSIDE,
+		ON_EDGE,
+		OUTSIDE
+	};
+
+	inline PointPosition pointInPolySimple(const array2d& p, const std::vector<array2d>& vertices, double epsilon)
+	{
+		int numVertices = static_cast<int>(vertices.size());
+
+		for (int i = 0, j = numVertices - 1; i < numVertices; j = i++) {
+			// Check if the point is close enough to the current edge
+			if (fabs((p[0] - vertices[i][0]) * (vertices[j][1] - vertices[i][1]) -
+				(vertices[j][0] - vertices[i][0]) * (p[1] - vertices[i][1])) < epsilon) {
+				return ON_EDGE; // Point is considered on the edge
+			}
+
+			// Check for intersection between the ray and the edge
+			if ((vertices[i][1] > p[1]) != (vertices[j][1] > p[1]) &&
+				p[0] < (vertices[j][0] - vertices[i][0]) * (p[1] - vertices[i][1]) / (vertices[j][1] - vertices[i][1]) + vertices[i][0]) {
+				return INSIDE; // Point is inside the polygon
+			}
+		}
+
+		return OUTSIDE; // Point is outside the polygon
+	}
+
+	inline bool isEnclosed(const std::vector<vec2>& loop1, const std::vector<vec2>& loop2, double eps)
 	{
 		bool all_points_inside = true;
 		for (size_t ii = 0; ii < loop1.size(); ++ii)
 		{
 			const vec2& p1 = loop1[ii];
-			if (!pointInPolySimple(loop2, p1, CARVE_EPSILON))
+			if (!pointInPolySimple(loop2, p1, eps))
 			{
 				all_points_inside = false;
 				break;
@@ -2020,7 +2157,7 @@ namespace GeomUtils
 	}
 
 	//\brief: collect connected edges and create face
-	static carve::mesh::Face<3>* createFaceFromEdgeLoop(carve::mesh::Edge<3>* start, double CARVE_EPSILON)
+	static carve::mesh::Face<3>* createFaceFromEdgeLoop(carve::mesh::Edge<3>* start, double eps)
 	{
 		carve::mesh::Edge<3>* e = start;
 		std::vector<carve::mesh::Edge<3>*> loop_edges;
@@ -2052,7 +2189,7 @@ namespace GeomUtils
 			e2->rev = openEdgeNext;
 		}
 
-		carve::mesh::Face<3>* f = new carve::mesh::Face<3>(start->rev, CARVE_EPSILON);
+		carve::mesh::Face<3>* f = new carve::mesh::Face<3>(start->rev, eps);
 
 		if (f->n_edges != N)
 		{
@@ -2064,7 +2201,7 @@ namespace GeomUtils
 	}
 
 	//\brief: 
-	static void closeMeshSet(carve::mesh::MeshSet<3>* meshset, double CARVE_EPSILON)
+	static void closeMeshSet(carve::mesh::MeshSet<3>* meshset, double eps)
 	{
 		// try to fix open mesh
 		for (size_t i = 0; i < meshset->meshes.size(); ++i)
@@ -2123,7 +2260,7 @@ namespace GeomUtils
 					if (openEdge1 != nullptr)
 					{
 						// close with triangle
-						carve::mesh::Face<3>* closingTriangle = createFaceFromEdgeLoop(openEdge1, CARVE_EPSILON);
+						carve::mesh::Face<3>* closingTriangle = createFaceFromEdgeLoop(openEdge1, eps);
 						if (closingTriangle != nullptr)
 						{
 							closingTriangle->mesh = mesh;
@@ -2136,7 +2273,7 @@ namespace GeomUtils
 					if (openEdge1 != nullptr && openEdge2 != nullptr)
 					{
 						// add triangle with 2 open edges and a new edge
-						carve::mesh::Face<3>* triangle = new carve::mesh::Face<3>(openEdge1->v2(), openEdge1->v1(), openEdge2->v2(), CARVE_EPSILON);
+						carve::mesh::Face<3>* triangle = new carve::mesh::Face<3>(openEdge1->v2(), openEdge1->v1(), openEdge2->v2(), eps);
 						triangle->mesh = mesh;
 						openEdge1->rev = triangle->edge;
 						triangle->edge->rev = openEdge1;

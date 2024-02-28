@@ -14,17 +14,17 @@ IF(NOT WIN32)
 ENDIF(NOT WIN32)
 
 # Qt library
-message(STATUS "Qt5 is used")
+message(STATUS "Qt6 is used")
 
 IF(DEFINED ENV{QT_DIR})
-	set(Qt5Core_DIR "$ENV{QT_DIR}/lib/cmake/Qt5Core")
-	set(Qt5_DIR "$ENV{QT_DIR}/lib/cmake/Qt5")
+	set(Qt6Core_DIR "$ENV{QT_DIR}/lib/cmake/Qt6Core")
+	set(Qt6_DIR "$ENV{QT_DIR}/lib/cmake/Qt6")
 	set(QT_QMAKE_EXECUTABLE "$ENV{QT_DIR}/bin/qmake.exe")
 ENDIF()
 
-FIND_PACKAGE(Qt5Core REQUIRED)
-FIND_PACKAGE(Qt5Widgets REQUIRED)
-FIND_PACKAGE(Qt5OpenGL REQUIRED)
+FIND_PACKAGE(Qt6Core REQUIRED)
+FIND_PACKAGE(Qt6Widgets REQUIRED)
+FIND_PACKAGE(Qt6OpenGL REQUIRED)
 ADD_DEFINITIONS(-DUNICODE)
 ADD_DEFINITIONS(-D_UNICODE)
 ADD_DEFINITIONS(-DIFCQUERY_STATIC_LIB)
@@ -34,7 +34,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 SET(viewer_dir ${IFCPP_SOURCE_DIR}/examples/SimpleViewerExampleQt)
 SET(RESOURCES ${viewer_dir}/Resources/ifcplusplus.qrc)
-QT5_ADD_RESOURCES(SimpleViewerExampleQt_RESOURCES_RCC ${RESOURCES})
+QT6_ADD_RESOURCES(SimpleViewerExampleQt_RESOURCES_RCC ${RESOURCES})
 
 FIND_PACKAGE(OpenSceneGraph REQUIRED osgDB osgUtil osgGA osgFX osgSim osgText osgViewer)
 
@@ -44,10 +44,11 @@ SET(IFCPPVIEWER_SOURCE_FILES
     src/cmd/CmdRemoveSelectedObjects.cpp
     src/cmd/Command.cpp
     src/cmd/CommandManager.cpp
+	src/gui/EntityAttributeWidget.cpp
     src/gui/IfcTreeWidget.cpp
     src/gui/MainWindow.cpp
-    src/gui/TabReadWrite.cpp
-    src/gui/TabView.cpp
+    src/gui/OpenFileWidget.cpp
+    src/gui/SettingsWidget.cpp
 	src/gui/StoreyShiftWidget.cpp
     src/viewer/GraphicsWindowQt.cpp
     src/viewer/OrbitCameraManipulator.cpp
@@ -57,15 +58,16 @@ SET(IFCPPVIEWER_SOURCE_FILES
 
 SET(IFCPPVIEWER_MOC_FILES
     src/IfcPlusPlusSystem.h
+	src/gui/EntityAttributeWidget.h
     src/gui/IfcTreeWidget.h
     src/gui/MainWindow.h
-    src/gui/TabReadWrite.h
-    src/gui/TabView.h
+    src/gui/OpenFileWidget.h
+    src/gui/SettingsWidget.h
 	src/gui/StoreyShiftWidget.h
     src/viewer/ViewerWidget.h
 )
 
-QT5_WRAP_CPP( IFCPPVIEWER_MOC_GENERATED_FILES ${IFCPPVIEWER_MOC_FILES})
+QT6_WRAP_CPP( IFCPPVIEWER_MOC_GENERATED_FILES ${IFCPPVIEWER_MOC_FILES})
 
 LINK_DIRECTORIES(${CMAKE_BINARY_DIR}/IfcPlusPlus/Debug)
 LINK_DIRECTORIES(${CMAKE_BINARY_DIR}/IfcPlusPlus/${CMAKE_BUILD_TYPE})
@@ -82,10 +84,10 @@ set_target_properties(SimpleViewerExampleQt PROPERTIES VS_DEBUGGER_ENVIRONMENT "
 
 target_link_libraries(SimpleViewerExampleQt
 		debug IfcPlusPlusd optimized IfcPlusPlus
-        Qt5::Core
-        Qt5::Gui
-        Qt5::Widgets
-        Qt5::OpenGL)
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::OpenGL)
 		
 If(UNIX)
     # ON Debian Stretch with cmake 3.7.2 OPENTHREADS_LIBRARY_DEBUG is a not known variable
@@ -140,7 +142,7 @@ TARGET_INCLUDE_DIRECTORIES(SimpleViewerExampleQt
     ${OSGUTIL_INCLUDE_DIR}
     ${OSGANIMATION_INCLUDE_DIR}
     ${OSGTEXT_INCLUDE_DIR}
-	${Qt5Core_INCLUDE_DIRS}
+	${Qt6Core_INCLUDE_DIRS}
 )
 
 INSTALL(
