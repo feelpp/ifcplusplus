@@ -57,8 +57,19 @@ Open source example application for Qt here available: https://github.com/ifcque
 https://github.com/ifcquery/ifcplusplus/wiki/Build-instructions
 
 
-## Screenshot of steel frame model in the example viewer
- 980 000 entities loaded, 8000 with geometric representation. Loaded in < 4 sec. on a standard PC, including geometry.
- ![Steel frame model](http://www.ifcquery.com/img/Building-model-steel-frame-2018-02-05.png)
+## BIMViewPlus: Advanced IFC viewer with integrated file browser, model split & export to IFC/glTF/html
+[https://github.com/BIMViewPlus/BIMViewPlus](https://github.com/BIMViewPlus/BIMViewPlus)
+
+The IFC viewer BIMViewPlus is based on IFC++, but is not open source.
+
+BIMViewPlus has an integrated file browser and a powerful search feature. 
+
+From the search results, a partial model can be extracted and exported to IFC4 or HTML/glTF/glb.
+
+![Screenshot 2024-04-01 221420](https://github.com/ifcquery/ifcplusplus/assets/150842425/4772a84c-446d-4303-8531-6135f34f1e5a)
+
+
+
+
  
    

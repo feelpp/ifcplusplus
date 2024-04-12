@@ -105,7 +105,7 @@ void readTypeOfIntegerList( const std::string& str, std::vector<shared_ptr<T> >&
 		else if( isspace( *ch ) )	{	++ch; }
 		else { break; }
 	}
-
+	
 	while( *ch != '\0' )
 	{
 		if( isspace(*ch) )
@@ -144,7 +144,7 @@ void readTypeOfIntegerList( const std::string& str, std::vector<shared_ptr<T> >&
 		{
 			break;
 		}
-
+		
 		if( *ch == ')' )
 		{
 			break;
@@ -279,7 +279,7 @@ void readTypeOfRealList( const std::string& str, std::vector<shared_ptr<T> >& ta
 		{
 			break;
 		}
-
+		
 		if( *ch == ')' )
 		{
 			break;
@@ -463,7 +463,7 @@ void readEntityReference( const std::string& str, shared_ptr<T>& target, const s
 	}
 	else if( str.compare("$")==0 )
 	{
-
+		
 	}
 	else if( str.compare("*")==0 )
 	{
@@ -525,7 +525,7 @@ void readSelectType( const std::string& item, shared_ptr<select_t>& result, cons
 		}
 		return;
 	}
-
+	
 	// could be type like IFCPARAMETERVALUE(90)
 	std::string type_name;
 	std::string inline_arg;
@@ -537,7 +537,7 @@ void readSelectType( const std::string& item, shared_ptr<select_t>& result, cons
 	}
 
 	std::transform(type_name.begin(), type_name.end(), type_name.begin(), [](char c) {return std::toupper(c); });
-
+	
 	shared_ptr<BuildingObject> type_instance = IFC4X3::TypeFactory::createTypeObject(type_name.c_str(), inline_arg, mapEntities, errorStream );
 	if( type_instance )
 	{
@@ -570,7 +570,7 @@ void readSelectList( const std::string& arg_complete, std::vector<shared_ptr<sel
 	std::string arg( pos_opening+1, pos_closing-pos_opening-1 );
 	std::vector<std::string> list_items;
 	tokenizeList( arg, list_items );
-
+	
 	for( size_t i=0; i<list_items.size(); ++i )
 	{
 		std::string& item = list_items[i];
@@ -604,7 +604,7 @@ void readEntityReferenceList( const char* arg_complete, std::vector<shared_ptr<T
 		if( arg_complete != nullptr )
 		{
 			if( *arg_complete == '$' )
-			{
+			{ 
 				// empty list
 				return;
 			}
@@ -636,7 +636,7 @@ void readEntityReferenceList( const char* arg_complete, std::vector<shared_ptr<T
 	if( vec_not_found.size() > 0 )
 	{
 		errorStream << "object with id ";
-
+		
 		for( size_t i=0; i<vec_not_found.size(); ++i )
 		{
 			errorStream	<< vec_not_found[i];
@@ -669,7 +669,7 @@ void readEntityReferenceList2D( const std::string& str, std::vector<std::vector<
 	{
 		return;
 	}
-
+	
 	char* last_token = ch;
 	int num_par_open = 0;
 	while( *ch != '\0' )
@@ -719,7 +719,7 @@ void readEntityReferenceList3D( const std::string& str, std::vector<std::vector<
 	{
 		return;
 	}
-
+	
 	int num_par_open = 0;
 	char* ch = (char*)str.c_str();
 	char* last_token = ch;
