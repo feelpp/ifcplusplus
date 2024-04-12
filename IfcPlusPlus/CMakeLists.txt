@@ -25,7 +25,7 @@ else(WIN32)
 	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE})
 endif(WIN32)
 
-set(IFCPP_SOURCE_FILES 
+set(IFCPP_SOURCE_FILES
     src/ifcpp/IFC4X3/EntityFactory.cpp
     src/ifcpp/IFC4X3/TypeFactory.cpp
 	src/ifcpp/model/BuildingGuid.cpp
@@ -38,6 +38,7 @@ set(IFCPP_SOURCE_FILES
 	src/ifcpp/geometry/MeshOps.cpp
 	src/ifcpp/geometry/GeometryInputData.cpp
 	src/ifcpp/geometry/MeshSimplifier.cpp
+        src/ifcpp/geometry/CSG_Adapter.cpp
 	src/external/Carve/src/lib/aabb.cpp
 	src/external/Carve/src/lib/carve.cpp
 	src/external/Carve/src/lib/convex_hull.cpp
@@ -70,7 +71,7 @@ set(IFCPP_SOURCE_FILES
 	src/external/Carve/src/common/geometry.cpp
 	src/external/zip-master/zip.c
 )
-    
+
 if (MSVC)
 	set_source_files_properties(src/ifcpp/IFC4X3/EntityFactory.cpp PROPERTIES COMPILE_FLAGS /bigobj)
 	set_source_files_properties(src/ifcpp/IFC4X3/TypeFactory.cpp PROPERTIES COMPILE_FLAGS /bigobj)
