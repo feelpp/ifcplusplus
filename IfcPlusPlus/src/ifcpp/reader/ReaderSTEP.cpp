@@ -16,12 +16,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 */
 
 #include <cstring>
-#include <execution>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
-#include <set>
+#include <unordered_set>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -173,7 +172,7 @@ void ReaderSTEP::loadModelFromStream(std::istream& content, std::streampos file_
 	readHeader(content, targetModel);
 
 	// currently generated IFC classes are IFC4X3, files with older versions are converted. So after loading, the schema is always IFC4X3
-	targetModel->m_ifc_schema_version_current = BuildingModel::IFC4X3;
+	targetModel->setIfcSchemaVersionEnumCurrent( BuildingModel::IFC4X3 );
 	readData(content, file_end_pos, targetModel);
 	targetModel->resolveInverseAttributes();
 	targetModel->updateCache();
@@ -184,6 +183,30 @@ void ReaderSTEP::loadModelFromStream(std::istream& content, std::streampos file_
 	progressValueCallback(progress, "parse");
 }
 
+void removeComments(std::string& line)
+{
+	for (size_t ii = 0; ii < line.size(); ++ii)
+	{
+		size_t found_comment_start = line.find("/*");
+		if (found_comment_start == std::string::npos)
+		{
+			break;
+		}
+		size_t found_comment_end = line.find("*/");
+		if (found_comment_end != std::string::npos)
+		{
+			if (found_comment_end > found_comment_start)
+			{
+				line.erase(found_comment_start, found_comment_end - found_comment_start + 2);
+			}
+		}
+		else
+		{
+			line.erase(found_comment_start);
+		}
+	}
+}
+
 void ReaderSTEP::readHeader(std::istream& content, shared_ptr<BuildingModel>& target_model)
 {
 	if (!target_model)
@@ -191,9 +214,9 @@ void ReaderSTEP::readHeader(std::istream& content, shared_ptr<BuildingModel>& ta
 		throw BuildingException("Model not set.", __FUNC__);
 	}
 
-	target_model->m_file_header = "";
-	target_model->m_IFC_FILE_DESCRIPTION = "";
-	target_model->m_IFC_FILE_NAME = "";
+	target_model->setFileHeader("");
+	target_model->setFileDescription("");
+	target_model->setFileName("");
 
 	std::string line;
 	std::string strHeader;
@@ -221,7 +244,8 @@ void ReaderSTEP::readHeader(std::istream& content, shared_ptr<BuildingModel>& ta
 					if (found_comment_end > found_comment_start)
 					{
 						inComment = false;
-						continue;
+						line.erase(found_comment_start, found_comment_end - found_comment_start + 2);
+						//continue;
 					}
 					// TODO: remove comment from line, and check rest of line
 				}
@@ -267,7 +291,8 @@ void ReaderSTEP::readHeader(std::istream& content, shared_ptr<BuildingModel>& ta
 		++lineCount;
 	}
 
-	target_model->m_ifc_schema_version_loaded_file = BuildingModel::IFC_VERSION_UNDEFINED;
+	removeComments(strHeader);
+	target_model->setIfcSchemaVersionEnumCurrent(BuildingModel::IFC_VERSION_UNDEFINED);
 	std::vector<std::string> vec_header;
 	std::vector<std::string> vec_header_str;
 	vec_header.emplace_back(strHeader);
@@ -353,43 +378,43 @@ void ReaderSTEP::readHeader(std::istream& content, shared_ptr<BuildingModel>& ta
 				file_schema_args = file_schema_args.substr(1, file_schema_args.size() - 2);
 			}
 
-			std::transform(file_schema_args.begin(), file_schema_args.end(), file_schema_args.begin(), ::toupper);
+			convertStringToUpperCase(file_schema_args);
 
 			if (file_schema_args.compare("IFC4X3") == 0)
 			{
-				target_model->m_ifc_schema_version_loaded_file = BuildingModel::IFC4X3;
+				target_model->setIfcSchemaVersionEnumCurrent(BuildingModel::IFC4X3);
 			}
 			else if (file_schema_args.compare("IFC4X1") == 0)
 			{
-				target_model->m_ifc_schema_version_loaded_file = BuildingModel::IFC4X1;
+				target_model->setIfcSchemaVersionEnumCurrent(BuildingModel::IFC4X1);
 			}
 			else if (file_schema_args.compare("IFC4") == 0)
 			{
-				target_model->m_ifc_schema_version_loaded_file = BuildingModel::IFC4;
+				target_model->setIfcSchemaVersionEnumCurrent(BuildingModel::IFC4);
 			}
 			else if (file_schema_args.substr(0, 6).compare("IFC2X4") == 0)
 			{
-				target_model->m_ifc_schema_version_loaded_file = BuildingModel::IFC2X4;
+				target_model->setIfcSchemaVersionEnumCurrent(BuildingModel::IFC2X4);
 			}
 			else if (file_schema_args.substr(0, 6).compare("IFC2X3") == 0)
 			{
-				target_model->m_ifc_schema_version_loaded_file = BuildingModel::IFC2X3;
+				target_model->setIfcSchemaVersionEnumCurrent(BuildingModel::IFC2X3);
 			}
 			else if (file_schema_args.substr(0, 6).compare("IFC2X2") == 0)
 			{
-				target_model->m_ifc_schema_version_loaded_file = BuildingModel::IFC2X2;
+				target_model->setIfcSchemaVersionEnumCurrent(BuildingModel::IFC2X2);
 			}
 			else if (file_schema_args.substr(0, 5).compare("IFC2X") == 0)
 			{
-				target_model->m_ifc_schema_version_loaded_file = BuildingModel::IFC2X;
+				target_model->setIfcSchemaVersionEnumCurrent(BuildingModel::IFC2X);
 			}
 			else if (file_schema_args.substr(0, 5).compare("IFC20") == 0)
 			{
-				target_model->m_ifc_schema_version_loaded_file = BuildingModel::IFC2X;
+				target_model->setIfcSchemaVersionEnumCurrent(BuildingModel::IFC2X);
 			}
 			else
 			{
-				target_model->m_ifc_schema_version_loaded_file = BuildingModel::IFC_VERSION_UNKNOWN;
+				target_model->setIfcSchemaVersionEnumCurrent(BuildingModel::IFC_VERSION_UNKNOWN);
 			}
 		}
 	}
@@ -460,7 +485,7 @@ void ReaderSTEP::readSingleStepLine(const std::string& line, std::pair<std::stri
 	while (isalnum(*stream_pos)) { ++stream_pos; }
 
 	std::string entity_name_upper(entity_name_begin, stream_pos - entity_name_begin);
-	std::transform(entity_name_upper.begin(), entity_name_upper.end(), entity_name_upper.begin(), ::toupper);
+	convertStringToUpperCase(entity_name_upper);
 
 	// proceed to '('
 	if (*stream_pos != '(')
@@ -516,7 +541,7 @@ void ReaderSTEP::readSingleStepLine(const std::string& line, std::pair<std::stri
 	}
 }
 
-void ReaderSTEP::readEntityArguments(std::vector<std::pair<std::string, shared_ptr<BuildingEntity> > >& vec_entities, const std::map<int, shared_ptr<BuildingEntity> >& map_entities, shared_ptr<BuildingModel>& model)
+void ReaderSTEP::readEntityArguments(std::vector<std::pair<std::string, shared_ptr<BuildingEntity> > >& vec_entities, const std::unordered_map<int, shared_ptr<BuildingEntity> >& map_entities, shared_ptr<BuildingModel>& model)
 {
 	// second pass, now read arguments
 	// every object can be initialized independently in parallel
@@ -528,22 +553,19 @@ void ReaderSTEP::readEntityArguments(std::vector<std::pair<std::string, shared_p
 	double progress = 0.3;
 	progressValueCallback(progress, "parse");
 	double last_progress = 0.3;
-	const std::map<int, shared_ptr<BuildingEntity> >* map_entities_ptr = &map_entities;
+	const std::unordered_map<int, shared_ptr<BuildingEntity> >* map_entities_ptr = &map_entities;
+	std::unordered_set<int> entityIdNotFoundAll;
 
 	std::mutex mutexProgress;
 	std::mutex mutexError;
+	std::mutex mutexEntityIdNotFound;
 	int i = 0;
 
 #ifdef _DEBUG
-	std::set<std::string> setClassesWithAdjustedArguments;
+	std::unordered_set<std::string> setClassesWithAdjustedArguments;
 #endif
-
-#ifdef _DEBUG_READ_SEQENTIAL
-	std::for_each(std::execution::seq,
-#else
-	std::for_each(std::execution::par,
-#endif
-		vec_entities.begin(), vec_entities.end(), [&](std::pair<std::string, shared_ptr<BuildingEntity> >& entity_read_object) {
+	
+	FOR_EACH_LOOP vec_entities.begin(), vec_entities.end(), [&](std::pair<std::string, shared_ptr<BuildingEntity> >& entity_read_object) {
 			if (model->isLoadingCancelled())
 			{
 				return;
@@ -555,6 +577,7 @@ void ReaderSTEP::readEntityArguments(std::vector<std::pair<std::string, shared_p
 				return;
 			}
 			std::stringstream errorStream;
+			std::unordered_set<int> entityIdNotFound;
 			std::string& argument_str = entity_read_object.first;
 			std::vector<std::string> arguments_raw;
 			tokenizeEntityArguments(argument_str, arguments_raw);
@@ -609,7 +632,7 @@ void ReaderSTEP::readEntityArguments(std::vector<std::pair<std::string, shared_p
 			{
 				int tag = entity->m_tag;
 			}
-			if (entity->m_tag == 5)
+			if (entity->m_tag == 23)
 			{
 				std::string className = EntityFactory::getStringForClassID(entity->classID());
 			}
@@ -631,17 +654,15 @@ void ReaderSTEP::readEntityArguments(std::vector<std::pair<std::string, shared_p
 
 			try
 			{
-				entity->readStepArguments(arguments_decoded, map_entities, errorStream);
+				entity->readStepArguments(arguments_decoded, map_entities, errorStream, entityIdNotFound);
 			}
 			catch (std::exception& e)
 			{
-
 				const std::lock_guard<std::mutex> lock(mutexError);
 				err << "#" << entity->m_tag << "=" << EntityFactory::getStringForClassID(entity->classID()) << ": " << e.what();
 			}
 			catch (std::exception* e)
 			{
-
 				const std::lock_guard<std::mutex> lock(mutexError);
 				err << "#" << entity->m_tag << "=" << EntityFactory::getStringForClassID(entity->classID()) << ": " << e->what();
 			}
@@ -649,6 +670,13 @@ void ReaderSTEP::readEntityArguments(std::vector<std::pair<std::string, shared_p
 			{
 				const std::lock_guard<std::mutex> lock(mutexError);
 				err << "#" << entity->m_tag << "=" << EntityFactory::getStringForClassID(entity->classID()) << " readStepData: error occurred" << std::endl;
+			}
+
+			// in case there are unresolved references
+			if (entityIdNotFound.size() > 0)
+			{
+				const std::lock_guard<std::mutex> lock(mutexEntityIdNotFound);
+				std::copy(entityIdNotFound.begin(), entityIdNotFound.end(), std::inserter(entityIdNotFoundAll, entityIdNotFoundAll.end()));
 			}
 
 			if (errorStream.tellp() > 0)
@@ -751,6 +779,23 @@ void ReaderSTEP::readEntityArguments(std::vector<std::pair<std::string, shared_p
 		}
 	}
 
+	if (entityIdNotFoundAll.size() > 0)
+	{
+		// unresolved entity references
+		err << "Entity with id # ";
+
+		for (auto it = entityIdNotFoundAll.begin(); it != entityIdNotFoundAll.end(); ++it)
+		{
+			if (it != entityIdNotFoundAll.begin())
+			{
+				err << ", ";
+			}
+			err << *it;
+		}
+
+		err << "  not found" << std::endl;
+	}
+
 	if (err.tellp() > 0)
 	{
 		messageCallback(err.str(), StatusCallback::MESSAGE_TYPE_ERROR, __FUNC__);
@@ -771,7 +816,7 @@ void ReaderSTEP::readData(std::istream& read_in, std::streampos file_size, share
 
 	size_t read_size = model->getFileHeader().size();
 	std::stringstream err;
-	std::set<std::string> unkown_entities;
+	std::unordered_set<std::string> unkown_entities;
 	std::stringstream err_unknown_entity;
 	std::vector<std::pair<std::string, shared_ptr<BuildingEntity> > > vec_entities;
 	try
@@ -892,14 +937,14 @@ void ReaderSTEP::readData(std::istream& read_in, std::streampos file_size, share
 	}
 
 	// copy entities into map so that they can be found during entity attribute initialization
-	std::map<int, shared_ptr<BuildingEntity> >& map_entities = model->m_map_entities;
+	std::unordered_map<int, shared_ptr<BuildingEntity> >& map_entities = model->getMapIfcEntities();
 	for (auto& entity_read_object : vec_entities)
 	{
 		shared_ptr<BuildingEntity> entity = entity_read_object.second;
 
 		if (entity) // skip aborted entities
 		{
-			map_entities[entity->m_tag] = entity;
+			model->insertEntity(entity);
 		}
 	}
 

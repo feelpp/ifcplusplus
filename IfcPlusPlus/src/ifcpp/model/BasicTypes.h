@@ -16,6 +16,32 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 */
 
 #pragma once
+#pragma warning( disable: 4305 )
+
+#if __has_include(<version>)
+#include <version>
+#endif
+
+#ifdef __cpp_lib_execution
+	#include <execution>
+	#if defined(_DEBUG_LOOP_SEQENTIAL) || defined(_DEBUG)
+		#define FOR_EACH_LOOP std::for_each( std::execution::seq,
+	#else
+		#define FOR_EACH_LOOP std::for_each( std::execution::par,
+	#endif
+#else
+	#define FOR_EACH_LOOP std::for_each(
+#endif
+
+// don't use glm::vec4, because it's x,y,z,w members depend on some defines, which can lead to lost colors
+struct vec4
+{
+	vec4() : r(0), g(0), b(0), a(0) {}
+	vec4(float _r, float _g, float _b, float _a) : r(_r), g(_g), b(_b), a(_a) {}
+	float r, g, b, a;
+};
+
+#define BuildingModelMapType std::unordered_map
 
 #if _MSC_VER >= 1600
 

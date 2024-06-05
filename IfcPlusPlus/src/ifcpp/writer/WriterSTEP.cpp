@@ -22,8 +22,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OU
 #include <iomanip>
 #include <clocale>
 #include <algorithm>
-#include <execution>
-
 
 #include "ifcpp/model/AttributeObject.h"
 #include "ifcpp/model/BasicTypes.h"
@@ -44,6 +42,11 @@ void WriterSTEP::writeModelToStream(std::stringstream& stream, shared_ptr<Buildi
 	stream.imbue(std::locale("C"));
 
 	const std::string& file_header_str = model->getFileHeader();
+	if(file_header_str.size() == 0)
+	{
+		std::string applicationName = "IfcPlusPlus";
+		model->initFileHeader("fileName.ifc", applicationName);
+	}
 	stream << "ISO-10303-21;\n";
 	stream << file_header_str.c_str();
 	stream << "DATA;\n";
@@ -51,9 +54,14 @@ void WriterSTEP::writeModelToStream(std::stringstream& stream, shared_ptr<Buildi
 	stream << std::setiosflags(std::ios::showpoint);
 	stream << std::fixed;
 
-	const std::map<int, shared_ptr<BuildingEntity> >& mapEntities = model->getMapIfcEntities();
+	const std::unordered_map<int, shared_ptr<BuildingEntity> >& mapEntities = model->getMapIfcEntities();
+	std::map<int, shared_ptr<BuildingEntity> > mapEntitiesAscendingTags;
+	for (auto it : mapEntities)
+	{
+		mapEntitiesAscendingTags.insert(it);
+	}
 	std::vector<std::tuple<int, shared_ptr<BuildingEntity>, std::string>> entityDataStrings;
-	for (auto entity : mapEntities)
+	for (auto entity : mapEntitiesAscendingTags)
 	{
 		entityDataStrings.push_back(std::tuple<int, shared_ptr<BuildingEntity>, std::string>(entity.first, entity.second, ""));
 	}
@@ -62,7 +70,7 @@ void WriterSTEP::writeModelToStream(std::stringstream& stream, shared_ptr<Buildi
 	auto t_start = std::chrono::high_resolution_clock::now();
 	std::atomic<int> counter = 0;
 	size_t numEntities = entityDataStrings.size();
-	std::for_each(std::execution::par, entityDataStrings.begin(), entityDataStrings.end(), [&, this](std::tuple<int, shared_ptr<BuildingEntity>, std::string>& entityDataForOutput) {
+	FOR_EACH_LOOP entityDataStrings.begin(), entityDataStrings.end(), [&, this](std::tuple<int, shared_ptr<BuildingEntity>, std::string>& entityDataForOutput) {
 		shared_ptr<BuildingEntity> obj = std::get<1>(entityDataForOutput);
 		if (obj.use_count() < 2)
 		{

@@ -296,5 +296,11 @@
     <ClCompile Include="src\ifcpp\geometry\MeshSimplifier.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
+    <ClCompile Include="src\ifcpp\geometry\SolidModelConverter.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ifcpp\geometry\CurveConverter.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

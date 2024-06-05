@@ -163,8 +163,42 @@ public:
 	//	}
 	//}
 
+	template <typename T>
+	bool hasRepresentationItemType(const shared_ptr<IfcRepresentation>& ifcRepresentation)
+	{
+		if (!ifcRepresentation)
+		{
+			return false;
+		}
+
+		for (const shared_ptr<IfcRepresentationItem>& representationItem : ifcRepresentation->m_Items)
+		{
+			shared_ptr<IfcMappedItem> mapped = dynamic_pointer_cast<IfcMappedItem>(representationItem);
+			if (mapped)
+			{
+				if (mapped->m_MappingSource)
+				{
+					shared_ptr<IfcRepresentation> mapped_representation = mapped->m_MappingSource->m_MappedRepresentation;
+
+					bool found = hasRepresentationItemType<T>(mapped_representation);
+					if (found)
+					{
+						return true;
+					}
+				}
+			}
+
+			shared_ptr<T> geomItem = dynamic_pointer_cast<T>(representationItem);
+			if (geomItem)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	void convertIfcRepresentation( const shared_ptr<IfcRepresentation>& ifcRepresentation, shared_ptr<ItemShapeData>& representationData, 
-		std::vector<weak_ptr<IfcRelVoidsElement> >& vec_rel_voids)
+		bool cacheIfcItems)
 	{
 		representationData->m_ifc_representation = ifcRepresentation;
 		printToDebugLog(__FUNC__, "");
@@ -180,7 +214,7 @@ public:
 
 				try
 				{
-					convertIfcGeometricRepresentationItem( geomItem, geomItemData, vec_rel_voids);
+					convertIfcGeometricRepresentationItem( geomItem, geomItemData );
 					representationData->addGeometricChildItem(geomItemData, representationData);
 				}
 				catch( BuildingException& e )
@@ -239,7 +273,7 @@ public:
 
 				try
 				{
-					convertIfcRepresentation( mapped_representation, mapped_input_data, vec_rel_voids );
+					convertIfcRepresentation( mapped_representation, mapped_input_data, cacheIfcItems);
 				}
 				catch( BuildingException& e )
 				{
@@ -297,6 +331,12 @@ public:
 			messageCallback( "unhandled representation", StatusCallback::MESSAGE_TYPE_WARNING, __FUNC__, representationItem.get() );
 		}
 
+		//int tag = ifcRepresentation->m_tag;
+		//bool hasPolygonal = hasRepresentationItemType<IfcPolygonalFaceSet>(ifcRepresentation);
+		//if (cacheIfcItems || hasPolygonal ) {
+			//ifcRepresentation->m_Items.clear();
+		//}
+
 		if( m_geom_settings->handleLayerAssignments() )
 		{
 			std::vector<weak_ptr<IfcPresentationLayerAssignment> >& vec_layer_assignments_inverse = ifcRepresentation->m_LayerAssignments_inverse;
@@ -344,12 +384,7 @@ public:
 		}
 	}
 
-
-
-
-
-	void convertIfcGeometricRepresentationItem( const shared_ptr<IfcGeometricRepresentationItem>& geom_item, shared_ptr<ItemShapeData>& item_data, 
-		std::vector<weak_ptr<IfcRelVoidsElement> >& vec_rel_voids)
+	void convertIfcGeometricRepresentationItem( const shared_ptr<IfcGeometricRepresentationItem>& geom_item, shared_ptr<ItemShapeData>& item_data)
 	{
 		//ENTITY IfcGeometricRepresentationItem
 		//ABSTRACT SUPERTYPE OF(ONEOF(IfcAnnotationFillArea, IfcBooleanResult, IfcBoundingBox, IfcCartesianPointList, IfcCartesianTransformationOperator, IfcCsgPrimitive3D, IfcCurve, 
@@ -369,61 +404,6 @@ public:
 			{
 				item_data->addStyle(style);
 			}
-		}
-
-
-		if (m_geometricItemCaching)
-		{
-			int itemTag = geom_item->m_tag;
-			auto findItemCacheIt = m_itemCache.find(itemTag);
-			if (findItemCacheIt != m_itemCache.end())
-			{
-				const shared_ptr<ItemCacheContainer>& currentItemCache = findItemCacheIt->second;
-				bool sameOpenings = true;
-				if (currentItemCache->vec_rel_voids.size() == vec_rel_voids.size())
-				{
-					for (size_t ii = 0; ii < currentItemCache->vec_rel_voids.size(); ++ii)
-					{
-						shared_ptr<IfcRelVoidsElement> relVoids(vec_rel_voids[ii]);
-						shared_ptr<IfcRelVoidsElement> relVoidsCache(currentItemCache->vec_rel_voids[ii]);
-						if (!relVoids && !relVoidsCache)
-						{
-							continue;
-						}
-						if (!relVoids)
-						{
-							sameOpenings = false;
-							continue;
-						}
-						if (!relVoidsCache)
-						{
-							sameOpenings = false;
-							continue;
-						}
-						if (relVoids->m_tag != relVoidsCache->m_tag)
-						{
-							// TODO: more sophisticated comparison. This captures only same objects in same order.
-							sameOpenings = false;
-						}
-					}
-				}
-				else
-				{
-					sameOpenings = false;
-				}
-
-				if (sameOpenings)
-				{
-					if (!item_data)
-					{
-						item_data = make_shared<ItemShapeData>();
-					}
-					item_data->copyFrom(currentItemCache->geometricItem);
-					//item_data = currentItemCache->geometricItem;
-					return;
-				}
-			}
-			m_itemCache.insert({ itemTag, make_shared<ItemCacheContainer>(item_data, vec_rel_voids) });
 		}
 
 		shared_ptr<IfcFaceBasedSurfaceModel> surface_model = dynamic_pointer_cast<IfcFaceBasedSurfaceModel>( geom_item );
@@ -457,8 +437,12 @@ public:
 		if( ifc_curve )
 		{
 			std::vector<vec3> loops;
-			std::vector<vec3> segment_start_points;
-			m_curve_converter->convertIfcCurve( ifc_curve, loops, segment_start_points, true );
+			std::vector<CurveConverter::CurveSegment> segments;
+			m_curve_converter->convertIfcCurve( ifc_curve, segments, true );
+			for (auto& seg : segments)
+			{
+				std::copy(seg.m_points.begin(), seg.m_points.end(), std::back_inserter(loops));
+			}
 
 			shared_ptr<carve::input::PolylineSetData> polyline_data( new carve::input::PolylineSetData() );
 			polyline_data->beginPolyline();
@@ -561,8 +545,12 @@ public:
 				if( select_curve )
 				{
 					std::vector<vec3> loops;
-					std::vector<vec3> segment_start_points;
-					m_curve_converter->convertIfcCurve( select_curve, loops, segment_start_points, true );
+					std::vector<CurveConverter::CurveSegment> segments;
+					m_curve_converter->convertIfcCurve( select_curve, segments, true );
+					for (auto& seg : segments)
+					{
+						std::copy(seg.m_points.begin(), seg.m_points.end(), std::back_inserter(loops));
+					}
 
 					shared_ptr<carve::input::PolylineSetData> polyline_data( new carve::input::PolylineSetData() );
 					polyline_data->beginPolyline();
@@ -641,7 +629,7 @@ public:
 				}
 				text_item_data->m_text = literal_text;
 
-				item_data->m_vec_text_literals.push_back( text_item_data );
+				item_data->m_text_literals.push_back( text_item_data );
 			}
 			return;
 		}
@@ -654,8 +642,12 @@ public:
 			std::vector<std::vector<vec3> > face_loops;
 			face_loops.push_back( std::vector<vec3>() );
 			std::vector<vec3>& outer_boundary_loop = face_loops.back();
-			std::vector<vec3> segment_start_points;
-			m_curve_converter->convertIfcCurve( outer_boundary, outer_boundary_loop, segment_start_points, true );
+			std::vector<CurveConverter::CurveSegment> segments;
+			m_curve_converter->convertIfcCurve( outer_boundary, segments, true );
+			for (auto& seg : segments)
+			{
+				std::copy(seg.m_points.begin(), seg.m_points.end(), std::back_inserter(outer_boundary_loop));
+			}
 
 			// convert inner boundaries
 			std::vector<shared_ptr<IfcCurve> >& vec_inner_boundaries = annotation_fill_area->m_InnerBoundaries;			//optional
@@ -667,12 +659,16 @@ public:
 				}
 				face_loops.push_back( std::vector<vec3>() );
 				std::vector<vec3>& inner_boundary_loop = face_loops.back();
-				std::vector<vec3> segment_start_points_inner_curve;
-				m_curve_converter->convertIfcCurve( inner_boundary, inner_boundary_loop, segment_start_points_inner_curve, true );
+				std::vector<CurveConverter::CurveSegment> segments;
+				m_curve_converter->convertIfcCurve( inner_boundary, segments, true );
+				for (auto& seg : segments)
+				{
+					std::copy(seg.m_points.begin(), seg.m_points.end(), std::back_inserter(inner_boundary_loop));
+				}
 			}
 
 			PolyInputCache3D poly_cache(params.epsMergePoints);
-			FaceConverter::createTriangulated3DFace( face_loops, poly_cache, params);
+			FaceConverter::createTriangulated3DFace( face_loops, poly_cache, params, false);
 			item_data->addOpenPolyhedron( poly_cache.m_poly_data, params );
 			return;
 		}
@@ -805,7 +801,7 @@ public:
 						std::reverse( loop_points.begin(), loop_points.end() );
 					}
 
-					FaceConverter::createTriangulated3DFace( face_loops, poly_cache_top_face, params );
+					FaceConverter::createTriangulated3DFace( face_loops, poly_cache_top_face, params, false );
 				}
 			}
 			if( poly_cache_top_face.m_poly_data )
@@ -839,7 +835,7 @@ public:
 				}
 
 				PolyInputCache3D poly_cache_top_face( params.epsMergePoints);
-				FaceConverter::createTriangulated3DFace( face_loops, poly_cache_top_face, params );
+				FaceConverter::createTriangulated3DFace( face_loops, poly_cache_top_face, params, false );
 
 				if( poly_cache_top_face.m_poly_data )
 				{
@@ -994,7 +990,8 @@ public:
 
 					try
 					{
-						convertIfcRepresentation(ifc_opening_representation, opening_item, vec_rel_voids);
+						bool clearIfcItems = false;  // IfcOpening might be referenced several times
+						convertIfcRepresentation(ifc_opening_representation, opening_item, clearIfcItems);
 					}
 					catch (BuildingException& e)
 					{
@@ -1059,5 +1056,48 @@ public:
 				product_shape->applyTransformToProduct(product_matrix_inverse, eps, false, false);
 			}
 		}
+	}
+
+	static bool hasBooleanOperations(const shared_ptr<IfcRepresentation>& ifcRepresentation)
+	{
+		for (const shared_ptr<IfcRepresentationItem>& representationItem : ifcRepresentation->m_Items)
+		{
+			shared_ptr<IfcMappedItem> mapped = dynamic_pointer_cast<IfcMappedItem>(representationItem);
+			if (mapped)
+			{
+				if (mapped->m_MappingSource)
+				{
+					shared_ptr<IfcRepresentation> mapped_representation = mapped->m_MappingSource->m_MappedRepresentation;
+
+					bool found = hasBooleanOperations(mapped_representation);
+					if (found)
+					{
+						return true;
+					}
+				}
+			}
+
+			shared_ptr<IfcBooleanResult> boolResult = dynamic_pointer_cast<IfcBooleanResult>(representationItem);
+			if (boolResult)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	static bool hasBooleanOperations(const shared_ptr<IfcProductRepresentation>& productRepresentation)
+	{
+		// TODO: if there are no bool ops, cache the entire representation
+
+		for (const shared_ptr<IfcRepresentation>& representation : productRepresentation->m_Representations)
+		{
+			bool found = hasBooleanOperations(representation);
+			if (found)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 };
