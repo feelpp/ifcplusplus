@@ -526,9 +526,12 @@ void ReaderSTEP::readSingleStepLine(const std::string& line, std::pair<std::stri
 				}
 				else if (entity_arg[entity_arg.size() - 1] == ';')
 				{
-					if (entity_arg[entity_arg.size() - 2] == ')')
+					std::string whitespaces (" \t\f\v\n\r");
+					size_t closing_parent_pos = entity_arg.find_last_not_of(whitespaces, entity_arg.size() - 2);
+
+					if (closing_parent_pos != std::string::npos && entity_arg[closing_parent_pos] == ')')
 					{
-						entity_arg = entity_arg.substr(1, entity_arg.size() - 3);
+						entity_arg = entity_arg.substr(1, closing_parent_pos - 1);
 					}
 				}
 			}
@@ -812,7 +815,7 @@ void ReaderSTEP::readData(std::istream& read_in, std::streampos file_size, share
 		return;
 	}
 	std::string file_schema_version = model->getIfcSchemaVersionOfLoadedFile();
-	messageCallback(std::string("Detected IFC version: ") + file_schema_version, StatusCallback::MESSAGE_TYPE_GENERAL_MESSAGE, "");
+	messageCallback(std::string("Detected IFC version: ") + file_schema_version, StatusCallback::MESSAGE_TYPE_GENERAL_MESSAGE, __FUNC__);
 
 	size_t read_size = model->getFileHeader().size();
 	std::stringstream err;
@@ -918,11 +921,6 @@ void ReaderSTEP::readData(std::istream& read_in, std::streampos file_size, share
 			++lineCount;
 		}
 	}
-	catch (UnknownEntityException& e)
-	{
-		std::string unknown_keyword = e.m_keyword;
-		err << __FUNC__ << ": unknown entity: " << unknown_keyword.c_str() << std::endl;
-	}
 	catch (BuildingException& e)
 	{
 		err << e.what();
@@ -934,6 +932,11 @@ void ReaderSTEP::readData(std::istream& read_in, std::streampos file_size, share
 	catch (...)
 	{
 		err << __FUNC__ << ": error occurred" << std::endl;
+	}
+
+	if (err_unknown_entity.tellp() > 0)
+	{
+		messageCallback(err_unknown_entity.str(), StatusCallback::MESSAGE_TYPE_UNKNOWN_ENTITY, __FUNC__);
 	}
 
 	// copy entities into map so that they can be found during entity attribute initialization
